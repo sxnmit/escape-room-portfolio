@@ -6,6 +6,7 @@ import { CapsuleCollider, RigidBody, useRapier, type RapierRigidBody } from '@re
 import { easing } from 'maath'
 import { useGame } from '@/state/gameStore'
 import { findNearest, interactWith } from '@/state/interactables'
+import { spawnBurst } from './fx/Burst'
 import { SPAWN, roomAt } from './world/layout'
 import { Character, type CharacterAnim } from './Character'
 import { sfx } from '@/audio/sfx'
@@ -68,7 +69,7 @@ export function Player() {
   const { world, rapier } = useRapier()
   const [, getKeys] = useKeyboardControls<Controls>()
 
-  const anim = useRef<CharacterAnim>({ speed: 0, running: false, moving: false, celebrateAt: -10, time: 0 })
+  const anim = useRef<CharacterAnim>({ speed: 0, running: false, moving: false, celebrateAt: -10, time: 0, lookAt: null })
   const cam = useRef({ yaw: SPAWN.yaw, pitch: 0.62, dist: CAM_DIST_DEFAULT, dragging: false, lastX: 0, lastY: 0 })
   const heading = useRef(SPAWN.yaw + Math.PI)
   const vel = useRef(new THREE.Vector3())
@@ -170,8 +171,12 @@ export function Player() {
   const celebrate = useGame((s) => s.celebrate)
   useEffect(() => {
     if (celebrate !== lastCelebrate.current) {
+      const first = lastCelebrate.current === 0
       lastCelebrate.current = celebrate
+      if (first && celebrate === 0) return
       anim.current.celebrateAt = anim.current.time
+      const p = playerSnapshot.position
+      spawnBurst([p.x, p.y + 1.2, p.z], '#ffd166')
     }
   }, [celebrate])
 
@@ -307,13 +312,16 @@ export function Player() {
       if (paused && s.overlay?.kind !== 'briefing') {
         // keep the prompt hidden while an overlay is up
         if (s.nearestId) s.setNearest(null)
+        anim.current.lookAt = null
       } else {
         const near = findNearest(tmp.pos)
         if (near) {
           const p = typeof near.prompt === 'function' ? near.prompt() : near.prompt
           s.setNearest(near.id, p)
-        } else if (s.nearestId) {
-          s.setNearest(null)
+          anim.current.lookAt = near.position
+        } else {
+          anim.current.lookAt = null
+          if (s.nearestId) s.setNearest(null)
         }
       }
     }

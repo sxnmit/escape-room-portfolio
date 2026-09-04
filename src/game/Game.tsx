@@ -9,6 +9,7 @@ import { Effects } from './fx/Effects'
 import { useGame } from '@/state/gameStore'
 import { LITE } from '@/utils/perf'
 import { DebugBridge } from './DebugBridge'
+import { Bursts } from './fx/Burst'
 
 export function Game() {
   return (
@@ -33,6 +34,7 @@ export function Game() {
           <Player />
           <World />
         </Physics>
+        <Bursts />
       </Suspense>
       <FxGate />
       <DebugBridge />
@@ -48,11 +50,11 @@ function FxGate() {
 function Lights() {
   return (
     <>
-      <ambientLight intensity={0.35} color="#b9c4ff" />
-      <hemisphereLight args={['#8ea2ff', '#14101f', 0.55]} />
+      <ambientLight intensity={0.6} color="#b9c4ff" />
+      <hemisphereLight args={['#8ea2ff', '#1a1530', 0.9]} />
       <directionalLight
         position={[18, 28, 12]}
-        intensity={1.3}
+        intensity={1.6}
         color="#fff4e0"
         castShadow={!LITE}
         shadow-mapSize={[2048, 2048]}

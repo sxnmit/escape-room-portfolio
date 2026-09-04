@@ -10,6 +10,8 @@ export interface CharacterAnim {
   /** anim.time at which the last celebration started. */
   celebrateAt: number
   time: number
+  /** World position the character should glance at (nearest interactable), or null. */
+  lookAt: THREE.Vector3 | null
 }
 
 const ACCENT = '#22d3ee'
@@ -36,6 +38,7 @@ export function Character({ anim, headingRef }: { anim: React.RefObject<Characte
   const light = useRef<THREE.PointLight>(null)
   const phase = useRef(0)
   const blink = useRef({ next: 2, until: 0 })
+  const headWorld = useRef(new THREE.Vector3())
 
   const mats = useMemo(
     () => ({
@@ -103,11 +106,26 @@ export function Character({ anim, headingRef }: { anim: React.RefObject<Characte
       armR.current.rotation.z = -flare - cheer
     }
 
-    // head look-around when idle, steady when moving
+    // head: glance at the nearest interactable, otherwise look around when idle
     if (head.current) {
       const idle = 1 - THREE.MathUtils.smoothstep(sp, 0, 0.2)
-      head.current.rotation.y = Math.sin(t * 0.6) * 0.35 * idle + Math.sin(ph * 0.5) * 0.05 * amp
-      head.current.rotation.x = Math.sin(t * 0.9) * 0.06 * idle - 0.05 * amp
+      let targetYaw = Math.sin(t * 0.6) * 0.35 * idle + Math.sin(ph * 0.5) * 0.05 * amp
+      let targetPitch = Math.sin(t * 0.9) * 0.06 * idle - 0.05 * amp
+      if (a.lookAt) {
+        root.current.getWorldPosition(headWorld.current)
+        const dx = a.lookAt.x - headWorld.current.x
+        const dz = a.lookAt.z - headWorld.current.z
+        const dy = a.lookAt.y - (headWorld.current.y + 1.6)
+        // desired yaw relative to the body heading, wrapped to [-π, π]
+        let rel = Math.atan2(dx, dz) - root.current.rotation.y
+        rel = Math.atan2(Math.sin(rel), Math.cos(rel))
+        if (Math.abs(rel) < 1.35) {
+          targetYaw = rel
+          targetPitch = THREE.MathUtils.clamp(-Math.atan2(dy, Math.hypot(dx, dz)), -0.35, 0.35)
+        }
+      }
+      head.current.rotation.y = THREE.MathUtils.damp(head.current.rotation.y, targetYaw, 6, delta)
+      head.current.rotation.x = THREE.MathUtils.damp(head.current.rotation.x, targetPitch, 6, delta)
       head.current.rotation.z = Math.sin(t * 0.45) * 0.05 * idle
     }
 

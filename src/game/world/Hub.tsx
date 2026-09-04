@@ -7,9 +7,10 @@ import { ChamberDoor, FinalDoor } from './Door'
 import { ResumeVault } from './Vault'
 import { TextPlane } from '@/utils/TextPlane'
 import { useGame, progressCount } from '@/state/gameStore'
+import { makeGridTexture } from '@/utils/textures'
 
-const floorMat = new THREE.MeshStandardMaterial({ color: '#3a4160', roughness: 0.9, metalness: 0.05 })
-const floorInsetMat = new THREE.MeshStandardMaterial({ color: '#2f3552', roughness: 0.95 })
+const floorMat = new THREE.MeshStandardMaterial({ color: '#4a5278', roughness: 0.9, metalness: 0.05, map: makeGridTexture({ base: '#3f4769', repeat: [12, 12] }) })
+const floorInsetMat = new THREE.MeshStandardMaterial({ color: '#333a5a', roughness: 0.95 })
 
 export function Hub() {
   const thetaStart = Math.PI / HUB_SIDES // faces centred on multiples of 30°

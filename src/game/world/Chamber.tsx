@@ -4,9 +4,10 @@ import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { CHAMBERS, type ChamberId } from '@/data/resume'
 import { CORRIDOR_LEN, CORRIDOR_W, ROOM_SIZE, SPOKES, WALL_H } from './layout'
 import { useGame } from '@/state/gameStore'
+import { makeGridTexture } from '@/utils/textures'
 
-const corridorMat = new THREE.MeshStandardMaterial({ color: '#333a55', roughness: 0.9 })
-const roomMat = new THREE.MeshStandardMaterial({ color: '#3a4160', roughness: 0.9 })
+const corridorMat = new THREE.MeshStandardMaterial({ color: '#3b4363', roughness: 0.9, map: makeGridTexture({ base: '#363e5c', repeat: [2, 4] }) })
+const roomMat = new THREE.MeshStandardMaterial({ color: '#434b70', roughness: 0.9, map: makeGridTexture({ base: '#3d4566', repeat: [8, 8] }) })
 const pillarMat = new THREE.MeshStandardMaterial({ color: '#232839', roughness: 0.5, metalness: 0.3 })
 
 /**
@@ -18,7 +19,7 @@ export function ChamberShell({ id, accent, children }: { id: ChamberId | 'about'
   const spoke = SPOKES[id]
   const f = spoke.frame
   const [, , cz] = spoke.roomCenterLocal
-  const insetMat = useMemo(() => new THREE.MeshStandardMaterial({ color: new THREE.Color(accent).multiplyScalar(0.25), roughness: 0.8 }), [accent])
+  const insetMat = useMemo(() => new THREE.MeshStandardMaterial({ color: new THREE.Color(accent).multiplyScalar(0.32), roughness: 0.8 }), [accent])
   const stripMat = useMemo(() => new THREE.MeshBasicMaterial({ color: accent, toneMapped: false }), [accent])
   const half = ROOM_SIZE / 2
 
