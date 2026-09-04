@@ -1,0 +1,30 @@
+/* eslint-disable */
+const { launch } = require('./harness.cjs')
+;(async () => {
+  const out = process.argv[2] || 'shots/smoke'
+  const url = process.argv[3] || 'http://127.0.0.1:5173'
+  const h = await launch({ url, out })
+  await h.shot('01-intro')
+  await h.start()
+  await h.wait(800)
+  await h.shot('02-hub-spawn')
+  console.log('player', await h.player())
+  await h.hold('KeyW', 1200)
+  await h.shot('03-walked-north')
+  console.log('player after walk', await h.player())
+  console.log('state', JSON.stringify(await h.state()))
+  await h.goto('scotiabank')
+  await h.shot('04-scotiabank-room')
+  await h.hold('KeyW', 2500)
+  await h.shot('05-near-console')
+  console.log('state', JSON.stringify(await h.state()))
+  await h.press('KeyE')
+  await h.wait(500)
+  await h.shot('06-after-E')
+  console.log('state', JSON.stringify(await h.state()))
+  console.log('ERRORS:', h.errors.length, h.errors.slice(0, 10))
+  await h.close()
+})().catch((e) => {
+  console.error('SMOKE FAILED', e)
+  process.exit(1)
+})
