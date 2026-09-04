@@ -206,6 +206,8 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
 
   // ── into the room ──────────────────────────────────────────────────────────
   await h.start()
+  // record every toast so timing-sensitive checks don't race the 3.6 s auto-clear
+  await page.evaluate(() => { window.__toasts = []; window.__game.store.subscribe((st) => { if (st.toast) window.__toasts.push(st.toast.text) }) })
   check('render loop is alive', await waitFrames(4))
   check('teleported into chamber III', await gotoAndSettle('tetratech', entry))
   check('render loop alive in chamber III', await waitFrames(4))
@@ -277,7 +279,8 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
   const solvedInTime = await waitFor(async () => (await h.state()).solved.tetratech, 3000, 100)
   check('state.solved.tetratech within 3 s', solvedInTime)
   s = await h.state()
-  check('success toast shown', !!s.toast && /deliverable/i.test(s.toast), s.toast)
+  const toasts = await page.evaluate(() => window.__toasts || [])
+  check('success toast shown', toasts.some((t) => /deliverable/i.test(t)) || (!!s.toast && /deliverable/i.test(s.toast)), toasts.slice(-2).join(' | '))
   // the lock / rise animation is driven by (clamped) frame time — software GL stalls on the new shaders, so wait on it
   check('lock animation completed', await waitFor(async () => (await blocks()).lockT > 2.6, 90000, 300))
   const locked = await blocks()

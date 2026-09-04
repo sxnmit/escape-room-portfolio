@@ -10,6 +10,18 @@ export default defineConfig({
   server: { port: 5173 },
   build: {
     target: 'es2022',
-    chunkSizeWarningLimit: 2000,
+    chunkSizeWarningLimit: 2500,
+    rolldownOptions: {
+      output: {
+        // split the big vendor libraries into their own long-lived chunks
+        codeSplitting: {
+          groups: [
+            { name: 'rapier', test: /node_modules[\\/]@dimforge/ },
+            { name: 'three', test: /node_modules[\\/](three|postprocessing|@react-three|maath)/ },
+            { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler|zustand|framer-motion|motion)/ },
+          ],
+        },
+      },
+    },
   },
 })

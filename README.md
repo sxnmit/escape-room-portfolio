@@ -19,7 +19,7 @@ npm run dev        # http://localhost:5173
 | mouse drag · `← →` · wheel | orbit / tilt / zoom the camera |
 | `Esc` | close an overlay, or open the pause menu |
 
-On touch devices a virtual joystick and an `E` button appear. Progress is saved in `localStorage`; the pause menu can reset it.
+On touch devices a virtual joystick, a run toggle and an `E` button appear. Progress is saved in `localStorage`; the pause menu can reset it or jump back to the hub.
 
 ### The route
 
@@ -60,12 +60,20 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full map. In short:
 
 ## Automated playthroughs
 
-`scripts/harness.cjs` drives the game in headless Chromium (software WebGL) through a small automation API exposed on `window.__game`. `scripts/e2e-flow.cjs` walks the whole progression loop and `scripts/qa/*.cjs` exercise each chamber:
+`scripts/harness.cjs` drives the game in headless Chromium (software WebGL) through a small automation API exposed on `window.__game`. `scripts/e2e-flow.cjs` walks the whole progression loop; `scripts/qa/*.cjs` play each chamber for real (typing into the terminal, dragging pipeline nodes, pushing crates, pressing keypad keys, lighting lamps), check the panels on desktop and the joystick on a phone-sized viewport, and take screenshots:
 
 ```bash
 npx vite --port 5173 &
 node scripts/e2e-flow.cjs shots/e2e http://127.0.0.1:5173
 node scripts/qa/terminal.cjs shots/terminal http://127.0.0.1:5173
+node scripts/qa/pipeline.cjs http://127.0.0.1:5173 shots/pipeline
+node scripts/qa/blocks.cjs http://127.0.0.1:5173 shots/blocks
+node scripts/qa/keypad.cjs http://127.0.0.1:5173 shots/keypad
+node scripts/qa/lanterns.cjs http://127.0.0.1:5173 shots/lanterns
+node scripts/qa/ui.cjs http://127.0.0.1:5173 shots/ui
+node scripts/qa/visuals.cjs http://127.0.0.1:5173 shots/visuals
 ```
+
+Each script prints `PASS`/`FAIL` lines and exits non-zero on a failure or a console error.
 
 Requires Playwright's Chromium to be installed (`npx playwright install chromium`).

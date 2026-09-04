@@ -1,87 +1,76 @@
 # Architecture
 
-A hub-and-spoke 3D world built with React Three Fiber. The player walks between five puzzle chambers arranged around a central hub; solving a chamber unseals a wall vault back in the hub that reveals one chapter of the resume. A sixth "finale" door opens once all five vaults are revealed.
+A hub-and-spoke 3D world built with React Three Fiber, Rapier physics and Zustand. This document is the map for anyone (human or agent) changing the game.
 
 ## Stack
 
-- **Vite + React 19 + TypeScript** (`npm run dev`, `npm run build`, `npm run typecheck`)
-- **three / @react-three/fiber / @react-three/drei** — rendering, `KeyboardControls`, `Stars`
-- **@react-three/rapier** — physics (walls are fixed cuboid colliders; the player is a dynamic capsule with locked rotations; crates are dynamic bodies)
-- **zustand** (+ `persist`) — game state, saved to `localStorage`
-- **framer-motion** — DOM overlay animation
-- **@react-three/postprocessing** — bloom + vignette (toggle with ✨, off in `?lite`)
-- No external assets. The character, all set dressing and in-world text are procedural (`src/utils/TextPlane.tsx` renders text onto a `CanvasTexture`). Sound is synthesised with WebAudio (`src/audio/sfx.ts`).
+| Concern | Choice |
+| --- | --- |
+| Rendering | React 19 + `@react-three/fiber` 9 + `@react-three/drei` 10, three r185 |
+| Physics | `@react-three/rapier` 2 (Rapier WASM) — capsule player, fixed cuboid walls, dynamic crates |
+| State | `zustand` 5 with `persist` (progress lives in `localStorage`) |
+| UI motion | `framer-motion` for DOM overlays, `maath` easing for 3D |
+| Post-processing | `@react-three/postprocessing` bloom + vignette (disabled by `?lite`) |
+| Build | Vite 8 (rolldown) with vendor chunks split into `rapier`, `three`, `react` |
 
-## Directory map
+No downloaded assets: character, rooms, signage (canvas-texture text) and sound (WebAudio oscillators) are generated in code.
 
-```
-src/
-  data/resume.ts            ← ALL content: chambers, resume text, puzzle copy, about/contact. Edit this.
-  state/gameStore.ts        ← zustand store + selectors (isChamberUnlocked, currentObjective, …)
-  state/interactables.ts    ← registry of "press E" targets + useInteractable() hook
-  game/
-    Game.tsx                ← <Canvas>, lights, <Physics>, effects
-    World.tsx               ← composes Walls + Hub + 5 chambers + AboutRoom
-    Player.tsx              ← WASD controller, third-person camera (orbit/zoom, wall raycast), E handling
-    Character.tsx           ← procedural animated character
-    DebugBridge.tsx         ← exposes renderer knobs to window.__game
-    world/layout.ts         ← ALL geometry math (hub 12-gon, spokes, wall segments, frames)
-    world/Walls.tsx         ← static walls + colliders
-    world/Hub.tsx           ← hub floor, plaque, doors, vaults
-    world/Door.tsx          ← ChamberDoor / FinalDoor (sliding panels, status strip, blocking collider)
-    world/Vault.tsx         ← ResumeVault (hinged circular door, artifact, opens the resume panel)
-    world/Chamber.tsx       ← ChamberShell: corridor + room floor, pillars, lights, entry-banner sensor
-    world/AboutRoom.tsx     ← closing room with the "Meet Sunny" monolith
-    chambers/*Chamber.tsx   ← per-chamber set-piece rendered INSIDE the spoke's local frame
-    puzzles3d/              ← in-world puzzles (crates & pads, lamps)
-    fx/                     ← post-processing, particles
-  ui/
-    UI.tsx                  ← overlay root; Escape handling; AnimatePresence switch on store.overlay
-    HUD.tsx                 ← objective card, progress pips, E prompt, toast, chamber banner, controls hint
-    Minimap.tsx             ← SVG map driven by layout.ts + playerSnapshot
-    IntroScreen / MenuOverlay / ResumePanel / AboutPanel / BriefingCard
-    PuzzleHost.tsx          ← mounts the right overlay puzzle; handles solve side-effects
-    PuzzleFrame.tsx         ← shared chrome for overlay puzzles
-    puzzles/                ← TerminalPuzzle, PipelinePuzzle, KeypadPuzzle (overlay puzzles)
-  utils/TextPlane.tsx       ← text → CanvasTexture plane (offline signage)
-  utils/perf.ts             ← `?lite` flag
-  utils/debug.ts            ← window.__game automation API
-scripts/
-  harness.cjs               ← Playwright playthrough harness (software WebGL)
-  e2e-flow.cjs              ← end-to-end progression check
-  qa/                       ← per-feature scenario scripts
-```
+## Content
 
-## Coordinate conventions (see `layout.ts`)
+`src/data/resume.ts` is the only place resume/puzzle copy lives: chamber names, accents, roles, bullets, highlight stats, terminal files and password, pipeline nodes and their order, crate labels, keypad code and monitor captions, lamp labels, the about blurb and contact links. Game logic only reads it.
 
-- `+y` up. Polar angle θ (degrees): `x = r·cos θ`, `z = −r·sin θ`, so **θ = 90° is north (−z)**.
-- Hub: 12-gon, circumradius 13, faces centred on multiples of 30°. Final door at 90°. Chamber doors at 30, 330, 270, 210, 150 (clockwise from the finale). Each chamber's resume vault sits on the solid face 30° clockwise of its door.
-- A **spoke** (`SPOKES[id]`) is a corridor (length 7, width 4) + a 16×16 room. Chamber content renders inside `<group position={frame.origin} rotation-y={frame.rotationY}>` where **local −z points away from the hub** and local +x is to the right when looking away from the hub. The room centre is `spoke.roomCenterLocal` (`[0, 0, −15]`), the far wall is at `z = −23`, and `spoke.puzzleAnchorLocal` (`[0, 0, −20]`) is a good spot for the main set-piece.
-- Colliders inside rotated groups are fine — react-three-rapier uses world matrices at creation.
+## World geometry (`src/game/world/layout.ts`)
 
-## Game flow / state
+- Polar convention: angle θ (degrees) → world `x = r·cos θ`, `z = −r·sin θ`, so θ = 90° is north (−z), the direction the player faces at spawn.
+- Hub: a 12-gon (circumradius 13). Faces sit at multiples of 30°. Doors on 90° (finale), 30° (I), 330° (II), 270° (III), 210° (IV), 150° (V) — chambers march clockwise. Resume vaults sit on the solid face clockwise of each chamber door (0°, 300°, 240°, 180°, 120°). The 60° face holds the title plaque.
+- Spoke: corridor (7 long, 4 wide) then a 16×16 room. Everything inside a chamber renders in the spoke's **local frame**: origin at the hub face, `−z` away from the hub, `+x` to the right; room spans `x ∈ [−8, 8]`, `z ∈ [−7, −23]`, centre `[0, 0, −15]`, puzzle anchor `[0, 0, −20]`.
+- `buildWalls()` derives every wall segment (hub faces with door openings, corridors, rooms) as world-space boxes; `Walls.tsx` renders them and their colliders under one fixed rigid body. `frameToWorld` / `worldToFrame` convert between frames; `roomAt` tells the HUD where the player is.
 
-- `solved[id]` — puzzle done. Set via `useGame.getState().solve(id)` (also triggers the character celebration).
-- `revealed[id]` — the vault panel has been opened. **Door N+1 unlocks when vault N is revealed** (`isChamberUnlocked`). Final door unlocks when all five are revealed.
-- `openedDoors[doorId]`, `flags[key]` — persisted world state (`flags` is free-form for in-world puzzle pieces, e.g. `lamp:y1`).
-- `overlay` — `intro | menu | puzzle | briefing | resume | about | null`. While an overlay is up the player controller ignores movement input and hides the E prompt.
-- Chamber entry sensors fire the banner (`showBanner`), toasts via `showToast(text, tone)`.
+## Progression rules (`src/state/gameStore.ts`)
 
-## Interaction pattern
+- `solved[chamber]` — the chamber's puzzle is done (opens the hub vault).
+- `revealed[chamber]` — the vault's resume panel has been opened. Chamber N+1's door unlocks when chamber N is **revealed**; the finale door unlocks when all five are revealed.
+- `openedDoors`, `flags` (lamp states etc.), `finished`, `muted`, `fx` are persisted; overlays, toasts, banners, `nearestId` are session-only.
+- Selectors: `isChamberUnlocked`, `lockReason`, `isFinalUnlocked`, `nextChamber`, `currentObjective`, `progressCount`.
 
-```tsx
-const anchor = useRef<THREE.Group>(null)
-const near = useInteractable({ id: 'thing:x', radius: 2.6, prompt: 'Do the thing', enabled: () => true, onInteract: () => {...} }, anchor)
-return <group><group ref={anchor} position={[0, 0, 1]} /> …mesh… </group>
-```
-The Player finds the nearest enabled interactable within its radius every few frames and the HUD shows `E · prompt`. `near` is true while this object is the highlighted one (use it to pulse a glow).
+## Interaction (`src/state/interactables.ts`)
 
-## Overlay puzzles
+Objects register `{ id, position, radius, prompt, enabled, onInteract }` with `useInteractable(spec, ref)` (world position read once after mount, so rotated groups are fine). The player controller finds the nearest enabled one within its radius every 3 frames and writes only the id/prompt into the store; the HUD renders the prompt; `E`/`Enter`/`Space`, the prompt pill, or the touch `E` button call `interactWith(id)`. Ids in use: `door:<chamber>`, `door:about`, `vault:<chamber>`, `console:<chamber>`, `console:tetratech:reset`, `lamp:mcmaster:<id>`, `about:monolith`.
 
-Implement `({ chamber, onSolved, solved }: PuzzleProps)` and wrap in `<PuzzleFrame chamber title>`. Call `onSolved()` once; the host marks the chamber solved, plays the success sound, shows a toast and closes the overlay ~2 s later — use that window to show your success state.
+## Player & camera (`src/game/Player.tsx`)
 
-## Automation / QA
+Dynamic capsule with locked rotations; horizontal velocity set from camera-relative WASD (or the virtual joystick in `playerSnapshot.touch`), smoothed with exponential damping. Third-person camera: yaw/pitch from mouse drag or arrow keys, wheel zoom, a Rapier ray from the player pulls the camera in when a wall blocks it. `playerSnapshot` exposes position/heading/camera yaw and diagnostics to the minimap and the automation harness. Overlays pause input.
 
-`window.__game` (see `utils/debug.ts`): `start()`, `goto('chalk')`, `teleport(x, z, yaw)`, `solve(id)`, `interact()`, `interactables()`, `state`, `player` (live position/heading), `setDpr(n)`.
+## Character (`src/game/Character.tsx`)
 
-`scripts/harness.cjs` wraps Playwright: `launch({url, out})` → `start()`, `goto(id)`, `walkTo(x, z)`, `hold(code, ms)`, `press(code)`, `type(text)`, `shot(name)`, `state()`, `player()`, `errors`. Software WebGL is slow, so the harness renders at DPR 0.35 while moving and at full DPR only for `shot()`. Run against a dev server started with `npx vite --port <port> --host 127.0.0.1` and append `?lite` (the harness does this automatically).
+Procedural low-poly explorer bot. Walk/run cycle, idle breathing and look-around, blink, celebration hop and spin on `celebrate`, and a glance toward the nearest interactable. Driven entirely from a mutable `CharacterAnim` ref — no React state per frame.
+
+## Chambers
+
+| Chamber | Files | Puzzle |
+| --- | --- | --- |
+| I Scotiabank | `chambers/ScotiabankChamber.tsx`, `ui/puzzles/TerminalPuzzle.tsx` | CRT terminal: `help`, `ls`, `cat`, `decrypt`, `unlock`, `hint`, tab-completion, history |
+| II Chalk | `chambers/ChalkChamber.tsx`, `ui/puzzles/PipelinePuzzle.tsx` (+ `pipeline/`) | Drag (or click-click) node cards to wire the flow in order; a data pulse runs the chain |
+| III Tetra Tech | `chambers/TetraTechChamber.tsx`, `puzzles3d/BlocksPuzzle.tsx` | Push crates onto colour-matched pads (push assist + magnet), reset console, deliverable rises |
+| IV InsightAI | `chambers/InsightAIChamber.tsx`, `ui/puzzles/KeypadPuzzle.tsx` (+ `keypad/`) | Read four monitors, enter the code; progressive digit reveal keeps it solvable |
+| V McMaster | `chambers/McMasterChamber.tsx`, `puzzles3d/Lanterns.tsx` | Light four lamps; chalkboard reveals the class year |
+| Finale | `world/AboutRoom.tsx`, `ui/AboutPanel.tsx` | Monolith opens the about panel |
+
+Overlay puzzles receive `PuzzleProps = { chamber, onSolved, solved }` from `ui/PuzzleHost.tsx`, which marks progress, plays the success sound and closes the overlay ~2 s later. In-world puzzles call `useGame.getState().solve(id)` themselves. `BriefingCard` shows the instructions for the in-world puzzles.
+
+## World polish
+
+- `Door.tsx`: spring-slid panels, status strip (dim crimson sealed → accent unlocked → mint open), white flash + burst on open, shake on a sealed interaction.
+- `Vault.tsx`: sealed until solved; when the player comes within range the wheel spins up, the door swings with overshoot, the artifact pops with a burst.
+- `fx/Burst.tsx`: pooled instanced confetti, `spawnBurst(position, color)`.
+- `utils/textures.ts`: procedural grid floor texture; `utils/TextPlane.tsx`: canvas-texture signage.
+
+## Performance knobs
+
+`?lite` disables shadows, MSAA and post-processing and pins DPR to 1 (the harness uses it). `window.__game.setDpr(n)` is exposed by `DebugBridge` for automation.
+
+## Automation (`scripts/`)
+
+`harness.cjs` launches headless Chromium with software WebGL, renders at low DPR while moving and full DPR for screenshots, and offers `start`, `goto`, `teleport`, `walkTo`, `press`, `hold`, `type`, `state`, `player`, `shot`. `window.__game` (from `utils/debug.ts`) exposes `start`, `goto`, `teleport`, `solve`, `reveal`, `solveAll`, `interact`, `interactables`, `reset`, `setDpr`, `renderer`, and per-chamber hooks such as `crates`/`blocks`.
+
+Scenarios: `e2e-flow.cjs` (progression loop), `qa/terminal.cjs`, `qa/pipeline.cjs`, `qa/blocks.cjs`, `qa/keypad.cjs`, `qa/lanterns.cjs`, `qa/ui.cjs` (desktop panels + mobile joystick), `qa/visuals.cjs` (screenshots in normal and lite modes). Each prints PASS/FAIL lines and exits non-zero on failure or console errors. Software rendering is slow; the scripts wait on state rather than fixed timers.
