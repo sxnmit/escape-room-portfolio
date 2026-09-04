@@ -39,14 +39,22 @@ const check = (name, cond, extra = '') => {
 
   // Software WebGL on a busy machine can run at 1–3 fps: make sure the teleport
   // has actually landed (re-issuing it if a frame never ran) before walking.
+  const landedAt = (target) =>
+    waitFor(async () => {
+      const p = await h.player()
+      return Math.hypot(p.x - target[0], p.z - target[1]) < 2.5
+    }, 12000, 250)
   const gotoAndSettle = async (id, target) => {
     for (let attempt = 0; attempt < 3; attempt++) {
       await h.goto(id)
-      const landed = await waitFor(async () => {
-        const p = await h.player()
-        return Math.hypot(p.x - target[0], p.z - target[1]) < 2.5
-      }, 12000, 250)
-      if (landed) return true
+      if (await landedAt(target)) return true
+    }
+    return false
+  }
+  const teleportAndSettle = async (x, z) => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await h.teleport(x, z)
+      if (await landedAt([x, z])) return true
     }
     return false
   }
@@ -161,17 +169,17 @@ const check = (name, cond, extra = '') => {
   const toWorld = (lx, lz) => [10.875 + lx * 0.5 - lz * 0.8660254, -6.279 + lx * 0.8660254 + lz * 0.5]
   const [hx, hz] = toWorld(4.6, -16.4)
   const [px, pz] = toWorld(1.2, -12.6)
-  await h.teleport(px, pz)
+  await teleportAndSettle(px, pz)
   await h.face(hx, hz)
   await h.shot('09-hologram')
   const [lx, lz] = toWorld(-7.66, -15.6)
   const [qx, qz] = toWorld(-2.6, -15.6)
-  await h.teleport(qx, qz)
+  await teleportAndSettle(qx, qz)
   await h.face(lx, lz)
   await h.shot('10-log-panel')
   const [dx, dz] = toWorld(0, -20)
   const [rx, rz] = toWorld(2.4, -16.6)
-  await h.teleport(rx, rz)
+  await teleportAndSettle(rx, rz)
   await h.face(dx, dz)
   await h.shot('11-desk-angle')
 

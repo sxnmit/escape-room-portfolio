@@ -89,6 +89,8 @@ async function vantage(h, from, toward, name) {
   const con = items.find((i) => i.id === 'console:chalk')
   check('console:chalk registered', !!con, JSON.stringify(con))
   check('walked to the pipeline board', await h.walkTo(con.x, con.z, { tolerance: 1.1, timeout: 45000 }))
+  // the nearest-interactable scan runs every 3 frames — give the starved renderer a moment
+  await page.waitForFunction(() => window.__game.state.nearestId === 'console:chalk', null, { timeout: 8000 }).catch(() => {})
   let s = await h.state()
   check('board prompt shows', s.nearestId === 'console:chalk' && /pipeline board/i.test(s.nearestPrompt), s.nearestPrompt)
   await h.shot('01-board-prompt')
@@ -105,10 +107,16 @@ async function vantage(h, from, toward, name) {
   await h.shot('02-overlay-open')
 
   // one wrong drag: rate → revenue is a real pipeline edge but not the *next* step
+  await page.evaluate(() => {
+    window.__flashed = []
+    const mo = new MutationObserver((ms) => ms.forEach((m) => m.target.dataset.flash === '1' && window.__flashed.push(m.target.dataset.node)))
+    document.querySelectorAll('.pp-card').forEach((c) => mo.observe(c, { attributes: true, attributeFilter: ['data-flash'] }))
+  })
   await drag(page, 'rate', 'revenue')
   check('wrong drag rejected (still 0 wired)', (await wired(page)) === 0)
   check('rejection message shown', await appears(page, '.pp-msg[data-tone="err"]'), await page.$eval('.pp-msg', (el) => el.textContent).catch(() => ''))
-  check('target card flashed red', await appears(page, '.pp-card[data-flash="1"]', 1500))
+  const flashed = await page.evaluate(() => window.__flashed)
+  check('target card flashed red', flashed.includes('revenue'), JSON.stringify(flashed))
   await h.shot('03-rejected')
 
   // hint pulses the next target

@@ -42,8 +42,10 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
   const slots = useMemo(() => boardLayout(order).map((id) => byId[id]).filter(Boolean), [order, byId])
   const css = useMemo(() => pipelineStyles(accent), [accent])
 
-  const [wired, setWired] = useState(solved ? total : 0)
-  const [phase, setPhase] = useState<Phase>(solved ? 'pulsing' : 'wiring')
+  /** `solved` flips true the moment onSolved() fires; the celebration must key off the state at mount. */
+  const solvedAtMount = useRef(solved).current
+  const [wired, setWired] = useState(solvedAtMount ? total : 0)
+  const [phase, setPhase] = useState<Phase>(solvedAtMount ? 'pulsing' : 'wiring')
   const [ports, setPorts] = useState<PortMap>({})
   const [armed, setArmed] = useState<string | null>(null)
   const [hot, setHot] = useState<string | null>(null)
@@ -52,7 +54,7 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
   const [shake, setShake] = useState<{ id: string; n: number }>({ id: '', n: 0 })
   const [ripples, setRipples] = useState<Ripple[]>([])
   const [msg, setMsg] = useState<{ text: ReactNode; tone: Tone; n: number }>(() =>
-    solved
+    solvedAtMount
       ? { text: successText, tone: 'ok', n: 0 }
       : { text: <>Start at <em>{byId[order[0]]?.label}</em> — drag it to whatever happens next, or click it and then click the next step.</>, tone: 'info', n: 0 },
   )
@@ -114,7 +116,7 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
       t.forEach((id) => clearTimeout(id))
       drag.current?.cleanup()
       // the player wired everything but closed the board mid-celebration: still counts
-      if (!solved && wiredRef.current === total && !fired.current) {
+      if (!solvedAtMount && wiredRef.current === total && !fired.current) {
         fired.current = true
         onSolved()
       }
@@ -336,13 +338,13 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
   const onNode = useCallback(
     (i: number, pass: number) => {
       litCard(order[i])
-      if (pass === 0 && !solved) sfx.play('blip')
+      if (pass === 0 && !solvedAtMount) sfx.play('blip')
     },
-    [order, litCard, solved],
+    [order, litCard, solvedAtMount],
   )
   const onPassEnd = useCallback(
     (pass: number) => {
-      if (pass !== 0 || solved) return
+      if (pass !== 0 || solvedAtMount) return
       setPhase('deployed')
       setMsg({ text: successText, tone: 'ok', n: Date.now() })
       if (!fired.current) {
@@ -350,12 +352,12 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
         onSolved()
       }
     },
-    [solved, successText, onSolved],
+    [solvedAtMount, successText, onSolved],
   )
 
   // belt and braces: if animation frames are starved, still complete a few seconds after the pulse starts
   useEffect(() => {
-    if (phase !== 'pulsing' || solved) return
+    if (phase !== 'pulsing' || solvedAtMount) return
     const t = later(() => {
       if (fired.current) return
       fired.current = true
@@ -364,7 +366,7 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
       onSolved()
     }, 4500)
     return () => clearTimeout(t)
-  }, [phase, solved, later, successText, onSolved])
+  }, [phase, solvedAtMount, later, successText, onSolved])
 
   const deployed = solved || phase === 'deployed'
   const stepOf = (id: string) => {
@@ -401,8 +403,8 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
             <svg className="pp-layer under" aria-hidden>
               {links.map((d, k) => (
                 <g key={k}>
-                  <motion.path className="pp-link-glow" d={d} initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.5, ease: 'easeOut', delay: solved ? 0.15 + k * 0.1 : 0 }} />
-                  <motion.path className="pp-link" d={d} initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.5, ease: 'easeOut', delay: solved ? 0.15 + k * 0.1 : 0 }} />
+                  <motion.path className="pp-link-glow" d={d} initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.5, ease: 'easeOut', delay: solvedAtMount ? 0.15 + k * 0.1 : 0 }} />
+                  <motion.path className="pp-link" d={d} initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.5, ease: 'easeOut', delay: solvedAtMount ? 0.15 + k * 0.1 : 0 }} />
                   {phase !== 'wiring' && <path className="pp-flow" d={d} />}
                 </g>
               ))}
@@ -443,11 +445,11 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
                   <motion.circle cx={r.p.x} cy={r.p.y} fill={accent} initial={{ r: 4, opacity: 0.9 }} animate={{ r: 16, opacity: 0 }} transition={{ duration: 0.5, ease: 'easeOut' }} />
                 </g>
               ))}
-              {phase !== 'wiring' && track && <DataPulse track={track} accent={accent} delay={solved ? 800 : 120} onNode={onNode} onPassEnd={onPassEnd} />}
+              {phase !== 'wiring' && track && <DataPulse track={track} accent={accent} delay={solvedAtMount ? 800 : 120} onNode={onNode} onPassEnd={onPassEnd} />}
             </svg>
 
             <AnimatePresence>
-              {phase === 'deployed' && !solved && (
+              {phase === 'deployed' && !solvedAtMount && (
                 <motion.div
                   className="pp-ribbon"
                   initial={{ opacity: 0, scaleX: 0.4, y: 12 }}
