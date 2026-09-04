@@ -37,16 +37,30 @@ const check = (name, cond, extra = '') => {
     await page.waitForTimeout(220)
   }
 
+  // Software WebGL on a busy machine can run at 1–3 fps: make sure the teleport
+  // has actually landed (re-issuing it if a frame never ran) before walking.
+  const gotoAndSettle = async (id, target) => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await h.goto(id)
+      const landed = await waitFor(async () => {
+        const p = await h.player()
+        return Math.hypot(p.x - target[0], p.z - target[1]) < 2.5
+      }, 12000, 250)
+      if (landed) return true
+    }
+    return false
+  }
+
   await h.start()
-  await h.goto('scotiabank')
-  await h.wait(600)
+  check('teleported into chamber I', await gotoAndSettle('scotiabank', [19.1, -11.03]))
+  await h.wait(400)
   await h.shot('01-room-locked')
 
   // ── walk to the desk ───────────────────────────────────────────────────────
   const items = await h.evaluate(() => window.__game.interactables())
   const con = items.find((i) => i.id === 'console:scotiabank')
   check('console interactable registered', !!con, con && `(${con.x.toFixed(2)}, ${con.z.toFixed(2)}) r=${con.r}`)
-  check('walked to the terminal', await h.walkTo(con.x, con.z, { tolerance: 1.3, timeout: 40000 }))
+  check('walked to the terminal', await h.walkTo(con.x, con.z, { tolerance: 1.3, timeout: 90000 }))
   let s = await h.state()
   check('terminal is the nearest interactable', s.nearestId === 'console:scotiabank', s.nearestId)
   check('prompt reads "Use terminal"', s.nearestPrompt === 'Use terminal', s.nearestPrompt)
@@ -115,9 +129,11 @@ const check = (name, cond, extra = '') => {
   await run('unlock onboard')
   const solvedInTime = await waitFor(async () => (await h.state()).solved.scotiabank, 3500, 100)
   check('correct key solves within 3.5 s', solvedInTime)
-  await h.shot('06-terminal-unsealed', { settle: 500 })
+  // the success lines stagger in over ~0.6 s after the bar completes; read them before the (slow) full-DPR shot
+  const printed = await waitFor(async () => /A vault has opened back in the hub/.test(await outputText()), 2000, 60)
   txt = await outputText()
-  check('success lines printed', /ACCESS GRANTED/.test(txt) && /100%/.test(txt))
+  check('success lines printed', printed && /ACCESS GRANTED/.test(txt) && /100%/.test(txt))
+  await h.shot('06-terminal-unsealed', { settle: 400 })
   const closed = await waitFor(async () => !(await h.state()).overlay, 4500, 120)
   check('overlay closes after solve', closed)
   await h.wait(600)
@@ -139,6 +155,25 @@ const check = (name, cond, extra = '') => {
   await h.press('Escape')
   s = await h.state()
   check('Escape closes the terminal', !s.overlay)
+
+  // ── beauty shots of the set dressing (not pass/fail) ───────────────────────
+  // world coords of local points in the scotiabank spoke: origin polar(30°, 12.557), rotY −60°
+  const toWorld = (lx, lz) => [10.875 + lx * 0.5 - lz * 0.8660254, -6.279 + lx * 0.8660254 + lz * 0.5]
+  const [hx, hz] = toWorld(4.6, -16.4)
+  const [px, pz] = toWorld(1.2, -12.6)
+  await h.teleport(px, pz)
+  await h.face(hx, hz)
+  await h.shot('09-hologram')
+  const [lx, lz] = toWorld(-7.66, -15.6)
+  const [qx, qz] = toWorld(-2.6, -15.6)
+  await h.teleport(qx, qz)
+  await h.face(lx, lz)
+  await h.shot('10-log-panel')
+  const [dx, dz] = toWorld(0, -20)
+  const [rx, rz] = toWorld(2.4, -16.6)
+  await h.teleport(rx, rz)
+  await h.face(dx, dz)
+  await h.shot('11-desk-angle')
 
   console.log('CONSOLE ERRORS:', h.errors.length, h.errors.slice(0, 8))
   const failed = results.filter((r) => !r[1])

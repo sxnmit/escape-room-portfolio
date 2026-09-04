@@ -54,19 +54,20 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
   const [msg, setMsg] = useState<{ text: ReactNode; tone: Tone; n: number }>(() =>
     solved
       ? { text: successText, tone: 'ok', n: 0 }
-      : { text: <>Start at <em>{byId[order[0]]?.label}</em> — drag its ● to whatever happens next.</>, tone: 'info', n: 0 },
+      : { text: <>Start at <em>{byId[order[0]]?.label}</em> — drag it to whatever happens next, or click it and then click the next step.</>, tone: 'info', n: 0 },
   )
 
+  const portsRef = useRef<PortMap>(ports)
   const boardRef = useRef<HTMLDivElement>(null)
   const liveRef = useRef<SVGPathElement>(null)
   const cards = useRef(new Map<string, HTMLDivElement>())
   const drag = useRef<Drag | null>(null)
   const wiredRef = useRef(wired)
   wiredRef.current = wired
+  const armedRef = useRef<string | null>(armed)
+  armedRef.current = armed
   const phaseRef = useRef(phase)
   phaseRef.current = phase
-  const portsRef = useRef(ports)
-  portsRef.current = ports
   const fired = useRef(false)
   const timers = useRef<number[]>([])
   const later = useCallback((fn: () => void, ms: number) => {
@@ -93,6 +94,8 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
       }
       next[id] = entry
     })
+    // keep the ref current synchronously so a click that lands before the next render still works
+    portsRef.current = next
     setPorts((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next))
   }, [])
 
@@ -118,6 +121,8 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  if (portsRef.current !== ports && Object.keys(portsRef.current).length === 0) portsRef.current = ports
 
   const track = useMemo(() => (wired === total ? buildTrack(order, ports) : null), [wired, total, order, ports])
 
@@ -206,6 +211,18 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
   const onOutDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>, id: string) => {
       if (phaseRef.current !== 'wiring' || drag.current) return
+      // click-click mode: an output is armed and this is a different, linkable node → link now
+      const armedId = armedRef.current
+      if (armedId && armedId !== id && id !== order[0]) {
+        e.preventDefault()
+        e.stopPropagation()
+        armedRef.current = null
+        setArmed(null)
+        setLive(null, null)
+        attemptLink(armedId, id)
+        return
+      }
+      if (!portsRef.current[id]?.out) measure()
       const src = portsRef.current[id]?.out
       if (!src) return
       e.preventDefault()
@@ -242,11 +259,15 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
         setHot(null)
         if (!d.moved) {
           // click-click mode: arm this output (or disarm it)
-          setArmed((prev) => (prev === id ? null : id))
+          const next = armedRef.current === id ? null : id
+          armedRef.current = next
+          setArmed(next)
           sfx.play('ui')
           setLive(null, null)
+          if (next) setMsg({ text: <><em>{byId[id]?.label}</em> selected — now click the step that comes next.</>, tone: 'info', n: Date.now() })
           return
         }
+        armedRef.current = null
         setArmed(null)
         setLive(null, null)
         if (d.hot) attemptLink(id, d.hot)
@@ -263,24 +284,27 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
       setDragging(id)
       setLive(src, src)
     },
-    [targetAt, toLocal, setLive, attemptLink],
+    [targetAt, toLocal, setLive, attemptLink, order, byId, measure],
   )
 
   const onTargetUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>, id: string) => {
-      if (drag.current || !armed || armed === id || id === order[0]) return
+      const armedId = armedRef.current
+      if (drag.current || !armedId || armedId === id || id === order[0]) return
       e.stopPropagation()
+      armedRef.current = null
       setArmed(null)
       setLive(null, null)
-      attemptLink(armed, id)
+      attemptLink(armedId, id)
     },
-    [armed, order, attemptLink],
+    [order, attemptLink, setLive],
   )
 
   const onBoardDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if ((e.target as HTMLElement).closest('.pp-port')) return
+      if ((e.target as HTMLElement).closest('.pp-card')) return
       if (armed) {
+        armedRef.current = null
         setArmed(null)
         setLive(null, null)
       }
@@ -328,6 +352,19 @@ export function PipelinePuzzle({ chamber, onSolved, solved }: PuzzleProps) {
     },
     [solved, successText, onSolved],
   )
+
+  // belt and braces: if animation frames are starved, still complete a few seconds after the pulse starts
+  useEffect(() => {
+    if (phase !== 'pulsing' || solved) return
+    const t = later(() => {
+      if (fired.current) return
+      fired.current = true
+      setPhase('deployed')
+      setMsg({ text: successText, tone: 'ok', n: Date.now() })
+      onSolved()
+    }, 4500)
+    return () => clearTimeout(t)
+  }, [phase, solved, later, successText, onSolved])
 
   const deployed = solved || phase === 'deployed'
   const stepOf = (id: string) => {

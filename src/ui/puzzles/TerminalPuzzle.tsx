@@ -53,6 +53,7 @@ export function TerminalPuzzle({ chamber, onSolved, solved }: PuzzleProps) {
   const [unsealed, setUnsealed] = useState(solved)
   const [flash, setFlash] = useState<{ kind: 'green' | 'red'; n: number } | null>(null)
 
+  const storeSolved = useGame((s) => !!s.solved[chamber])
   const engine = useRef<EngineState>(initialEngineState(solved))
   const history = useRef<string[]>([])
   const histIdx = useRef(0)
@@ -163,6 +164,18 @@ export function TerminalPuzzle({ chamber, onSolved, solved }: PuzzleProps) {
     setFlash({ kind: 'red', n: performance.now() })
     void shake.start({ x: [0, -11, 9, -7, 5, -3, 2, 0], transition: { duration: 0.42, ease: 'easeOut' } })
   }, [shake])
+
+  // ── solved from outside the shell (e.g. window.__game.solve) ─────────────
+  // Show the granted state at once and let the host close the overlay.
+  useEffect(() => {
+    if (!storeSolved || engine.current.solved || solvedFired.current) return
+    engine.current = { ...engine.current, solved: true }
+    setBusy(false)
+    setUnsealed(true)
+    setFlash({ kind: 'green', n: performance.now() })
+    push([{ text: RULE, tone: 'rule' }, ...TERMINAL_PUZZLE.successLines.map((text, i) => ({ text, tone: (i === 0 ? 'success' : 'default') as Line['tone'] }))])
+    fireSolved()
+  }, [storeSolved, push, fireSolved])
 
   // ── submit a command ─────────────────────────────────────────────────────
   const submit = useCallback(
@@ -301,7 +314,7 @@ export function TerminalPuzzle({ chamber, onSolved, solved }: PuzzleProps) {
   )
 
   return (
-    <PuzzleFrame chamber={chamber} title={`${TERMINAL_PUZZLE.hostname} — restricted shell`} width={820} hint={status}>
+    <PuzzleFrame chamber={chamber} title="onboarding-gateway — restricted shell" width={820} hint={status}>
       <div className="term-root">
         <motion.div className={`term-crt${unsealed ? ' unsealed' : ''}${busy ? ' busy' : ''}`} animate={shake} onMouseUp={refocus} data-testid="terminal">
           <div className="term-screen" ref={screenRef}>

@@ -48,6 +48,7 @@ export function NodeCard({ node, slot, isStart, isEnd, step, linkedIn, linkedOut
         className={cls}
         data-node={node.id}
         animate={shake}
+        onPointerDown={(e) => onOutDown(e, node.id)}
         onPointerUp={(e) => onTargetUp(e, node.id)}
       >
         {chip && (
@@ -76,7 +77,6 @@ export function NodeCard({ node, slot, isStart, isEnd, step, linkedIn, linkedOut
             className={['pp-port out', linkedOut && 'linked', armed && 'armed', done && 'done'].filter(Boolean).join(' ')}
             data-port="out"
             title="output — drag to the next step"
-            onPointerDown={(e) => onOutDown(e, node.id)}
           />
         )}
       </motion.div>

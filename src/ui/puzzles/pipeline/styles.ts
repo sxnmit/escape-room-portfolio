@@ -26,7 +26,9 @@ export function pipelineStyles(accent: string) {
   background-size: 22px 22px, 100% 100%;
   touch-action: none;
 }
-.pp-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.pp-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+/* the overlay root forces pointer-events:auto on every descendant — the SVG layers must stay transparent to the pointer */
+.pp-layer, .pp-layer *, .pp-ribbon { pointer-events: none !important; }
 .pp-layer.under { z-index: 0; }
 .pp-layer.over { z-index: 3; }
 .pp-card {
@@ -46,6 +48,8 @@ export function pipelineStyles(accent: string) {
 .pp-card[data-lit="1"] { border-color: ${accent}; box-shadow: 0 0 0 2px ${accent}cc, 0 0 40px ${accent}88; background: linear-gradient(180deg, #16332a, #0f2420); transition: none; }
 .pp-card.hinting { animation: pp-hint 0.66s ease-in-out 3; }
 @keyframes pp-hint { 0%,100% { box-shadow: 0 0 0 1px ${accent}55, 0 0 0 rgba(0,0,0,0); border-color: ${accent}; } 50% { box-shadow: 0 0 0 4px ${accent}, 0 0 34px ${accent}aa; border-color: #ffffff; } }
+.pp-card { cursor: grab; }
+.pp-card:active { cursor: grabbing; }
 .pp-card.done { cursor: default; }
 .pp-label { font-size: 14.5px; font-weight: 700; letter-spacing: 0.01em; color: #eef1ff; }
 .pp-hint { margin-top: 4px; font-size: 11.5px; line-height: 1.35; color: var(--muted); }
@@ -62,7 +66,7 @@ export function pipelineStyles(accent: string) {
   cursor: pointer; touch-action: none; z-index: 2;
   transition: transform 0.18s cubic-bezier(.34,1.56,.64,1), box-shadow 0.2s ease, background 0.25s ease, border-color 0.25s ease;
 }
-.pp-port::after { content: ''; position: absolute; inset: -8px; border-radius: 50%; }
+.pp-port::after { content: ''; position: absolute; inset: -14px; border-radius: 50%; }
 .pp-port.in { left: -11px; background: #0a1220; border: 2.5px solid #a7b1d6; }
 .pp-port.out { right: -11px; background: #e8ecff; border: 2.5px solid #e8ecff; box-shadow: 0 0 0 3px rgba(232,236,255,0.12); }
 .pp-port.out:hover, .pp-port.out.armed { transform: scale(1.25); box-shadow: 0 0 0 4px ${accent}55, 0 0 18px ${accent}aa; background: ${accent}; border-color: ${accent}; }

@@ -217,7 +217,7 @@ export const TERMINAL_PUZZLE = {
 /** Chamber II — pipeline. Nodes must be connected in `order`. */
 export const PIPELINE_PUZZLE = {
   title: 'Chalk — table session pipeline',
-  instructions: 'Drag from a node’s output port ● to the next node’s input port ○ to wire the flow, from opening a table to the owner’s dashboard.',
+  instructions: 'Wire the flow from opening a table to the owner’s dashboard: drag one node onto the step that comes next (or click a node, then click the next step).',
   nodes: [
     { id: 'open', label: 'Table opens', hint: 'A player racks up — a session begins.' },
     { id: 'timer', label: 'Live session timer', hint: 'Tracks minutes played in real time.' },

@@ -17,9 +17,10 @@ export interface DataPulseProps {
 const TRAIL = [0, 12, 24, 38]
 
 /**
- * A glowing packet that travels the wired chain (RAF-driven, no React state per
- * frame). Fires `onNode` as it reaches each node and `onPassEnd` after each pass,
- * then keeps looping until unmounted.
+ * A glowing packet that travels the wired chain and keeps looping until
+ * unmounted. The dot itself is moved in requestAnimationFrame (no React state
+ * per frame); the node-reached / pass-end events are scheduled with timers so
+ * they land on time even when a slow renderer starves rAF.
  */
 export function DataPulse({ track, accent, duration = 1600, gap = 420, delay = 0, onNode, onPassEnd }: DataPulseProps) {
   const dots = useRef<(SVGCircleElement | null)[]>([])
@@ -28,12 +29,27 @@ export function DataPulse({ track, accent, duration = 1600, gap = 420, delay = 0
   cb.current = { onNode, onPassEnd }
 
   useEffect(() => {
-    let raf = 0
-    const start = performance.now() + delay
-    let pass = 0
-    let fired = -1
-    let ended = false
     const cycle = duration + gap
+    const start = performance.now() + delay
+    const timers: number[] = []
+    let raf = 0
+
+    // ── events: a timer per node arrival + one for the pass end, re-armed every cycle ──
+    const schedule = (pass: number) => {
+      const base = delay + pass * cycle
+      track.nodeAt.forEach((s, i) => {
+        timers.push(window.setTimeout(() => cb.current.onNode?.(i, pass), base + (s / (track.total || 1)) * duration))
+      })
+      timers.push(
+        window.setTimeout(() => {
+          cb.current.onPassEnd?.(pass)
+          schedule(pass + 1)
+        }, base + duration),
+      )
+    }
+    schedule(0)
+
+    // ── visuals ──
     const show = (v: boolean) => {
       const vis = v ? 'visible' : 'hidden'
       dots.current.forEach((d) => d && (d.style.visibility = vis))
@@ -46,28 +62,12 @@ export function DataPulse({ track, accent, duration = 1600, gap = 420, delay = 0
         show(false)
         return
       }
-      let local = el - pass * cycle
-      while (local >= cycle) {
-        pass++
-        fired = -1
-        ended = false
-        local -= cycle
-      }
+      const local = el % cycle
       if (local >= duration) {
-        if (!ended) {
-          ended = true
-          cb.current.onPassEnd?.(pass)
-        }
         show(false)
         return
       }
       const s = (local / duration) * track.total
-      for (let i = fired + 1; i < track.nodeAt.length; i++) {
-        if (track.nodeAt[i] <= s + 0.5) {
-          fired = i
-          cb.current.onNode?.(i, pass)
-        } else break
-      }
       show(true)
       dots.current.forEach((d, i) => {
         if (!d) return
@@ -83,7 +83,10 @@ export function DataPulse({ track, accent, duration = 1600, gap = 420, delay = 0
       }
     }
     raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      cancelAnimationFrame(raf)
+      timers.forEach((t) => clearTimeout(t))
+    }
   }, [track, duration, gap, delay])
 
   return (
