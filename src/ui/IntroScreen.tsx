@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { CHAMBER_ORDER, GAME_SUBTITLE, GAME_TITLE } from '@/data/resume'
+import { CHAMBERS, CHAMBER_ORDER, GAME_SUBTITLE, GAME_TITLE } from '@/data/resume'
 import { useGame, progressCount } from '@/state/gameStore'
 import { sfx } from '@/audio/sfx'
 
@@ -9,6 +9,7 @@ export function IntroScreen() {
   const reset = useGame((s) => s.resetProgress)
   const progress = useGame((s) => progressCount(s))
   const hasProgress = useGame((s) => Object.keys(s.solved).length > 0 || Object.keys(s.openedDoors).length > 0)
+  const revealed = useGame((s) => s.revealed)
 
   const begin = () => {
     sfx.unlock()
@@ -39,7 +40,27 @@ export function IntroScreen() {
           Walk. Solve. Reveal. Start with the most recent chapter and work back to the foundations.
         </p>
 
-        <div className="panel" style={{ display: 'inline-grid', gridTemplateColumns: 'repeat(2, auto)', gap: '10px 28px', padding: '14px 22px', marginTop: 22, fontSize: 14, textAlign: 'left' }}>
+        {/* the journey, as locked chapter cards */}
+        <motion.div initial="hidden" animate="show" transition={{ staggerChildren: 0.08, delayChildren: 0.5 }} style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 22, flexWrap: 'wrap' }}>
+          {CHAMBER_ORDER.map((id) => {
+            const c = CHAMBERS[id]
+            const open = !!revealed[id]
+            return (
+              <motion.div
+                key={id}
+                variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
+                className="panel"
+                style={{ width: 104, padding: '10px 8px', borderRadius: 12, borderTop: `2px solid ${open ? c.accent : 'rgba(255,255,255,0.15)'}`, opacity: open ? 1 : 0.75 }}
+              >
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 800, color: open ? c.accent : 'var(--muted)' }}>{c.numeral}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{c.name}</div>
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, letterSpacing: '0.1em' }}>{open ? 'OPEN' : '🔒 SEALED'}</div>
+              </motion.div>
+            )
+          })}
+        </motion.div>
+
+        <div className="panel" style={{ display: 'inline-grid', gridTemplateColumns: 'repeat(2, auto)', gap: '10px 28px', padding: '14px 22px', marginTop: 18, fontSize: 14, textAlign: 'left' }}>
           <span><kbd className="key">W</kbd><kbd className="key">A</kbd><kbd className="key">S</kbd><kbd className="key">D</kbd> &nbsp;move</span>
           <span><kbd className="key">Shift</kbd> &nbsp;run</span>
           <span><kbd className="key">E</kbd> &nbsp;interact</span>

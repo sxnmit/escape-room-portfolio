@@ -45,6 +45,9 @@ export function ResumePanel({ chamber }: { chamber: ChamberId }) {
   }, [])
 
   const stagger = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }
+  const index = chamberIndex(chamber)
+  const next = CHAMBER_ORDER[index + 1]
+  const nextText = next ? `Next: Chamber ${CHAMBERS[next].numeral} · ${CHAMBERS[next].name} — its door unseals when you continue.` : 'Every chapter recovered — the final door unseals when you continue.'
 
   return (
     <motion.div className="overlay-backdrop interactive" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
@@ -56,7 +59,16 @@ export function ResumePanel({ chamber }: { chamber: ChamberId }) {
         transition={{ type: 'spring', stiffness: 260, damping: 26 }}
         style={{ width: '100%', maxWidth: 820, maxHeight: '92vh', padding: 0, overflow: 'auto', borderTop: `3px solid ${c.accent}` }}
       >
-        <div style={{ padding: '26px 30px 10px', display: 'flex', gap: 22, alignItems: 'flex-start' }}>
+        {/* chapter ribbon */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 30px 0' }}>
+          <span style={{ fontSize: 10, letterSpacing: '0.25em', fontWeight: 800, color: 'var(--muted)' }}>CHAPTER {index + 1} OF {CHAMBER_ORDER.length}</span>
+          <div style={{ display: 'flex', gap: 4, flex: 1, maxWidth: 220 }}>
+            {CHAMBER_ORDER.map((id, i) => (
+              <motion.div key={id} initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 0.2 + i * 0.06 }} style={{ height: 4, flex: 1, borderRadius: 2, transformOrigin: 'left', background: i <= index ? CHAMBERS[id].accent : 'rgba(255,255,255,0.12)' }} />
+            ))}
+          </div>
+        </div>
+        <div style={{ padding: '14px 30px 10px', display: 'flex', gap: 22, alignItems: 'flex-start' }}>
           <motion.div initial={{ scale: 0.6, rotate: -20, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ delay: 0.15, type: 'spring', stiffness: 220 }} style={{ width: 70, height: 70, borderRadius: 18, flexShrink: 0, display: 'grid', placeItems: 'center', background: c.accent, color: '#0b0e17', fontFamily: 'var(--serif)', fontWeight: 800, fontSize: 34, boxShadow: `0 0 40px ${c.accent}66` }}>
             {c.numeral}
           </motion.div>
@@ -110,7 +122,10 @@ export function ResumePanel({ chamber }: { chamber: ChamberId }) {
           ))}
         </motion.div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '20px 30px 26px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: '20px 30px 26px', flexWrap: 'wrap' }}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }} style={{ fontSize: 13, color: 'var(--muted)', flex: 1, minWidth: 200 }}>
+            {wasRevealed ? 'Recovered earlier — re-read any chapter from the pause menu.' : nextText}
+          </motion.div>
           <button className="btn primary" onClick={onClose}>
             {wasRevealed ? 'Close' : 'Continue'} <kbd className="key" style={{ background: 'rgba(0,0,0,0.2)', color: '#1a1400', border: 'none', boxShadow: 'none' }}>↵</kbd>
           </button>

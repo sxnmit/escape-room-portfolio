@@ -4,6 +4,8 @@ import { CHAMBERS, CHAMBER_ORDER } from '@/data/resume'
 import { useGame, currentObjective } from '@/state/gameStore'
 import { Minimap } from './Minimap'
 import { sfx } from '@/audio/sfx'
+import { interactWith } from '@/state/interactables'
+import { useIsTouch } from './TouchControls'
 
 export function HUD() {
   return (
@@ -121,11 +123,20 @@ function Prompt() {
           exit={{ opacity: 0, y: 10, scale: 0.96 }}
           transition={{ type: 'spring', stiffness: 380, damping: 28 }}
           style={{ position: 'absolute', left: '50%', bottom: 64, transform: 'translateX(-50%)' }}
+          className="interactive"
         >
-          <div className="panel" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px 10px 12px', borderRadius: 999, fontSize: 15, fontWeight: 600 }}>
+          <button
+            className="panel"
+            onClick={() => {
+              const nid = useGame.getState().nearestId
+              if (nid) interactWith(nid)
+            }}
+            aria-label={`Interact: ${prompt}`}
+            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px 10px 12px', borderRadius: 999, fontSize: 15, fontWeight: 600, color: 'var(--text)' }}
+          >
             <kbd className="key">E</kbd>
             <span>{prompt}</span>
-          </div>
+          </button>
         </motion.div>
       )}
     </AnimatePresence>
@@ -193,7 +204,8 @@ function Banner() {
 }
 
 function ControlsHint() {
-  const [show, setShow] = useState(true)
+  const isTouch = useIsTouch()
+  const [show, setShow] = useState(!isTouch)
   useEffect(() => {
     const t = setTimeout(() => setShow(false), 14000)
     return () => clearTimeout(t)

@@ -9,6 +9,7 @@ import { AboutPanel } from './AboutPanel'
 import { PuzzleHost } from './PuzzleHost'
 import { BriefingCard } from './BriefingCard'
 import { sfx } from '@/audio/sfx'
+import { TouchControls } from './TouchControls'
 
 export function UI() {
   const overlay = useGame((s) => s.overlay)
@@ -40,6 +41,7 @@ export function UI() {
   return (
     <div className="ui-root">
       {started && <HUD />}
+      <TouchControls />
       <AnimatePresence mode="wait">
         {overlay?.kind === 'intro' && <IntroScreen key="intro" />}
         {overlay?.kind === 'menu' && <MenuOverlay key="menu" />}

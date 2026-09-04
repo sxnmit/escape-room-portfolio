@@ -61,6 +61,8 @@ export const playerSnapshot = {
   debug: { frames: 0, ix: 0, iz: 0, paused: true, vx: 0, vz: 0 },
   /** set by the Player so automation can steer the camera (movement is camera-relative) */
   setYaw: (_yaw: number) => {},
+  /** virtual joystick input from TouchControls: x = right, z = forward, both in [-1, 1] */
+  touch: { x: 0, z: 0, run: false },
 }
 
 export function Player() {
@@ -216,8 +218,17 @@ export function Player() {
       if (keys.left) ix -= 1
       if (keys.right) ix += 1
     }
+    if (!paused && ix === 0 && iz === 0) {
+      // fall back to the virtual joystick
+      const tl = Math.hypot(playerSnapshot.touch.x, playerSnapshot.touch.z)
+      if (tl > 0.12) {
+        const k = tl > 1 ? 1 / tl : 1
+        ix = playerSnapshot.touch.x * k
+        iz = playerSnapshot.touch.z * k
+      }
+    }
     const moving = ix !== 0 || iz !== 0
-    const running = moving && !!keys.run
+    const running = moving && (!!keys.run || playerSnapshot.touch.run)
     const speed = running ? RUN_SPEED : WALK_SPEED
 
     // camera-relative basis
