@@ -44,10 +44,15 @@ const step = (m) => console.log(`\n── ${m}`)
   const openConsole = async (chamber, consoleId) => {
     await h.goto(chamber)
     const con = (await page.evaluate(() => window.__game.interactables())).find((i) => i.id === consoleId)
-    await h.walkTo(con.x, con.z, { tolerance: 1.3, timeout: 45000 })
-    await waitNearest(consoleId)
+    if (!(await h.approach(consoleId, con.x, con.z))) return false
     await h.press('KeyE')
     return waitOverlay('puzzle')
+  }
+  /** Press E once the world agrees the object is highlighted again. */
+  const interactWhenReady = async (id) => {
+    if (!(await waitNearest(id, 15000))) return false
+    await h.press('KeyE')
+    return true
   }
 
   await h.start()
@@ -68,8 +73,7 @@ const step = (m) => console.log(`\n── ${m}`)
   await h.goto('hub')
   await waitFor(async () => dist(await h.player(), { x: 0, z: 2.5 }) < 3, 12000, 250)
   const v = polar(0, APOTHEM - 3.2)
-  await h.walkTo(v.x, v.z, { tolerance: 1.1, timeout: 45000 })
-  await waitNearest('vault:scotiabank')
+  check('walked to vault I', await h.approach('vault:scotiabank', v.x, v.z, { tolerance: 1.1 }))
   await h.press('KeyE')
   check('resume panel opened', await waitOverlay('resume'))
   await page.keyboard.press('Enter') // no wait at all: beat the 600 ms reveal timer
@@ -81,8 +85,7 @@ const step = (m) => console.log(`\n── ${m}`)
   // ── 3. a stale close timer must not shut a reopened puzzle ───────────────
   step('Reopening a just-solved puzzle stays open')
   const d2 = polar(330, APOTHEM - 2.2)
-  await h.walkTo(d2.x, d2.z, { tolerance: 1.2, timeout: 45000 })
-  await waitNearest('door:chalk')
+  check('walked to door II', await h.approach('door:chalk', d2.x, d2.z, { tolerance: 1.2 }))
   check('door II unlocked after the reveal', /^Open Chamber/.test((await state()).nearestPrompt), (await state()).nearestPrompt)
   await h.press('KeyE')
   await waitFor(async () => !!(await state()).openedDoors['door:chalk'], 6000)
@@ -99,7 +102,9 @@ const step = (m) => console.log(`\n── ${m}`)
     await page.keyboard.press('Escape')
     await waitFor(async () => !(await state()).overlay, 6000)
     await page.waitForTimeout(400)
-    await h.press('KeyE') // reopen well before the old 2.2 s close timer would fire
+    // reopen well before the old 2.2 s close timer would fire — but only once the
+    // world has re-highlighted the console, which takes frames, not milliseconds
+    check('console highlighted again after closing', await interactWhenReady('console:insightai'))
     check('the puzzle reopened', await waitOverlay('puzzle'))
     await page.waitForTimeout(2600) // outlive the stale timer
     check('it is still open after the stale timer would have fired', (await state()).overlay?.kind === 'puzzle', JSON.stringify((await state()).overlay))
@@ -121,7 +126,10 @@ const step = (m) => console.log(`\n── ${m}`)
   // (chamber IV's door was never opened in this run, so the corridor is as far
   // as the player can get — which also proves a closed door really blocks)
   const exit = localToWorld(0, -1.6)
-  await h.walkTo(exit.x, exit.z, { tolerance: 1.4, timeout: 60000 })
+  // two passes: a single walk can time out mid-corridor on a loaded machine
+  for (let i = 0; i < 2 && dist(await h.player(), exit) > 2.4; i++) {
+    await h.walkTo(exit.x, exit.z, { tolerance: 1.4, timeout: 60000 })
+  }
   await page.waitForTimeout(900)
   const banners = await page.evaluate(() => window.__banners || [])
   check('no banner fired on the way out', banners.length === 0, banners.join(','))

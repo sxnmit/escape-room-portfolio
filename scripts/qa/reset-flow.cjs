@@ -10,6 +10,7 @@
  */
 const path = require('path')
 const { launch } = require('../harness.cjs')
+const { crateDriver } = require('./lib/crates.cjs')
 
 const args = process.argv.slice(2)
 const url = args.find((a) => /^https?:/.test(a)) || 'http://127.0.0.1:5173'
@@ -18,6 +19,16 @@ const out = args.find((a) => !/^https?:/.test(a)) || path.join(__dirname, '..', 
 const APOTHEM = 12.557
 const polar = (deg, r) => ({ x: r * Math.cos((deg * Math.PI) / 180), z: -r * Math.sin((deg * Math.PI) / 180) })
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
+
+// the Tetra Tech spoke's local frame, for the shared crate driver
+const TH = ((270 - 90) * Math.PI) / 180
+const ORIGIN = polar(270, APOTHEM)
+const toWorld = (lx, lz) => ({ x: lx * Math.cos(TH) + lz * Math.sin(TH) + ORIGIN.x, z: -lx * Math.sin(TH) + lz * Math.cos(TH) + ORIGIN.z })
+const toLocal = (wx, wz) => {
+  const dx = wx - ORIGIN.x
+  const dz = wz - ORIGIN.z
+  return { x: dx * Math.cos(TH) - dz * Math.sin(TH), z: dx * Math.sin(TH) + dz * Math.cos(TH) }
+}
 
 const results = []
 const check = (name, cond, extra = '') => {
@@ -69,30 +80,19 @@ const step = (m) => console.log(`\n── ${m}`)
   // the reset console must be usable again
   const reset = (await page.evaluate(() => window.__game.interactables())).find((i) => i.id === 'console:tetratech:reset')
   check('reset console is registered', !!reset)
-  check('walked to the reset console', await h.walkTo(reset.x, reset.z, { tolerance: 1.3, timeout: 45000 }))
-  check('reset console offers its prompt again', await waitFor(async () => (await h.state()).nearestId === 'console:tetratech:reset', 8000), (await h.state()).nearestPrompt)
+  check('walked to the reset console', await h.approach('console:tetratech:reset', reset.x, reset.z))
+  check('reset console offers its prompt again', (await h.state()).nearestId === 'console:tetratech:reset', (await h.state()).nearestPrompt)
 
   // and the crates must be pushable again (i.e. dynamic, not fixed)
   step('The puzzle is playable a second time')
   const c0 = (await blocks()).crates[0]
   const spawn = { x: c0.x, z: c0.z }
-  let placed = false
-  for (let attempt = 0; attempt < 5 && !placed; attempt++) {
-    const c = (await blocks()).crates.find((k) => k.id === c0.id)
-    const pad = { x: c.px, z: c.pz }
-    const d = dist(c, pad)
-    if (d < 0.7) { placed = true; break }
-    const ux = (c.x - pad.x) / d
-    const uz = (c.z - pad.z) / d
-    await h.walkTo(c.x + ux * 1.9, c.z + uz * 1.9, { tolerance: 0.5, timeout: 40000 })
-    await h.walkTo(pad.x + ux * 0.95, pad.z + uz * 0.95, { tolerance: 0.45, timeout: 40000 })
-    await h.wait(900)
-    placed = onPad((await blocks()).crates.find((k) => k.id === c0.id))
-  }
+  const drv = crateDriver(h, { toLocal, toWorld, log: (m) => console.log(m) })
+  const r = await drv.pushCrate(c0.id)
   const moved = (await blocks()).crates.find((c) => c.id === c0.id)
   check('a crate can be pushed after the reset', dist(moved, spawn) > 0.8, `moved ${dist(moved, spawn).toFixed(2)}`)
-  check('it can be placed on its pad again', placed, `${dist(moved, { x: moved.px, z: moved.pz }).toFixed(2)} from the pad`)
-  check('pad detection runs again', await waitFor(async () => (await blocks()).fill.some((f) => f > 0.5), 6000), JSON.stringify((await blocks()).fill))
+  check('it can be placed on its pad again', r.ok, `${r.d.toFixed(2)} from the pad after ${r.attempts} attempt(s)`)
+  check('pad detection runs again', await waitFor(async () => (await blocks()).fill.some((f) => f > 0.5), 8000), JSON.stringify((await blocks()).fill))
   await h.shot('03-pushable-again')
 
   step('The hub reopened as well')
