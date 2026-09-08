@@ -12,6 +12,7 @@
  */
 const path = require('path')
 const { launch } = require('../harness.cjs')
+const { crateDriver } = require('./lib/crates.cjs')
 
 const args = process.argv.slice(2)
 const url = args.find((a) => /^https?:/.test(a)) || 'http://127.0.0.1:5183'
@@ -42,15 +43,16 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
   const { page } = h
 
   const entry = toWorld(0, -9.5)
-  const rawCrates = () => page.evaluate(() => (window.__game && window.__game.crates ? window.__game.crates() : null))
-  const rawBlocks = () => page.evaluate(() => (window.__game && window.__game.blocks ? window.__game.blocks() : null))
+
   /**
    * Other modules in this tree are edited live; a broken HMR update can unmount the whole
    * Canvas (taking the puzzle, its debug hooks and the player with it) and remount it later.
    * Wait for the hooks to come back and re-enter the chamber if the player got reset.
    */
+  /** Raw probe used only by ensureLive: the driver's accessors call back into it. */
+  const hooksLive = () => page.evaluate(() => !!(window.__game && window.__game.crates && window.__game.crates()))
   async function ensureLive() {
-    const ok = await waitFor(async () => !!(await rawCrates()), 30000, 300)
+    const ok = await waitFor(hooksLive, 30000, 300)
     if (!ok) return false
     let s = await h.state()
     if (!s.started) await h.start()
@@ -61,9 +63,9 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
     }
     return true
   }
-  const crates = async () => (await rawCrates()) || ((await ensureLive()) && (await rawCrates())) || []
-  const blocks = async () => (await rawBlocks()) || ((await ensureLive()) && (await rawBlocks())) || { crates: [], locked: false, solved: false, lockT: 0 }
-  const crate = async (id) => (await crates()).find((c) => c.id === id)
+  // crate handling (accessors, routing, pushing) is shared with the full playthrough
+  const driver = crateDriver(h, { toLocal, toWorld, ensureLive: () => ensureLive(), log: (m) => console.log(m) })
+  const { crates, blocks, crate, routeTo, goBehind, pushCrate } = driver
   const waitFor = async (fn, timeout, step = 120) => {
     const t0 = Date.now()
     while (Date.now() - t0 < timeout) {
@@ -108,102 +110,6 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
     return toLocal(p.x, p.z)
   }
 
-  // ── tiny path router: detour around any crate the straight walk would clip ──
-  const CLEAR = 1.15 // crate half (0.55) + capsule radius (0.35) + margin
-  function firstBlocker(a, b, obstacles) {
-    let worst = null
-    const abx = b.x - a.x
-    const abz = b.z - a.z
-    const L2 = abx * abx + abz * abz
-    if (L2 < 1e-6) return null
-    for (const o of obstacles) {
-      let t = ((o.x - a.x) * abx + (o.z - a.z) * abz) / L2
-      t = Math.max(0, Math.min(1, t))
-      const cx = a.x + abx * t
-      const cz = a.z + abz * t
-      const d = Math.hypot(o.x - cx, o.z - cz)
-      if (d < CLEAR && t > 0.02 && t < 0.98 && (!worst || t < worst.t)) worst = { o, t, cx, cz, d }
-    }
-    return worst
-  }
-  /** Keep a waypoint inside the room's open floor (local frame). */
-  const clampRoom = (p) => {
-    const l = toLocal(p.x, p.z)
-    return toWorld(Math.max(-5.4, Math.min(5.4, l.x)), Math.max(-21.4, Math.min(-8.4, l.z)))
-  }
-  /** walkTo that steps around crates instead of shoving them. */
-  async function routeTo(target, opts = {}, exclude = [], depth = 0) {
-    const me = await h.player()
-    const hit = firstBlocker(me, target, (await crates()).filter((c) => !exclude.includes(c.id)))
-    if (!hit || depth > 3) return h.walkTo(target.x, target.z, opts)
-    const abx = target.x - me.x
-    const abz = target.z - me.z
-    const L = Math.hypot(abx, abz) || 1
-    const nx = -abz / L
-    const nz = abx / L
-    let side = (hit.o.x - hit.cx) * nx + (hit.o.z - hit.cz) * nz > 0 ? -1 : 1
-    let wp = { x: hit.o.x + nx * side * 2.0, z: hit.o.z + nz * side * 2.0 }
-    if (Math.abs(toLocal(wp.x, wp.z).x) > 5.4) {
-      side = -side
-      wp = { x: hit.o.x + nx * side * 2.0, z: hit.o.z + nz * side * 2.0 }
-    }
-    wp = clampRoom(wp)
-    console.log(`   detour around crate ${hit.o.id} via (${wp.x.toFixed(1)}, ${wp.z.toFixed(1)})`)
-    await routeTo(wp, { tolerance: 0.5, timeout: 30000 }, exclude, depth + 1)
-    return routeTo(target, opts, exclude, depth + 1)
-  }
-
-  /**
-   * Get to `target` (a point ~1.5 behind crate `c`) without touching it: reach a circle of
-   * radius R around the crate, walk around that circle to the target's bearing, then step in.
-   */
-  async function goBehind(c, target, R = 1.95) {
-    const centre = { x: c.x, z: c.z }
-    let me = await h.player()
-    const dm = dist(me, centre) || 1
-    const entryPt = clampRoom({ x: centre.x + ((me.x - centre.x) / dm) * R, z: centre.z + ((me.z - centre.z) / dm) * R })
-    if (dm < R - 0.1) await h.walkTo(entryPt.x, entryPt.z, { tolerance: 0.35, timeout: 20000 })
-    else await routeTo(entryPt, { tolerance: 0.4, timeout: 40000 }, [c.id])
-    me = await h.player()
-    const others = (await crates()).filter((k) => k.id !== c.id)
-    const a0 = Math.atan2(me.z - centre.z, me.x - centre.x)
-    const a1 = Math.atan2(target.z - centre.z, target.x - centre.x)
-    const delta = ((((a1 - a0 + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) - Math.PI
-    const steps = Math.ceil(Math.abs(delta) / (Math.PI / 3.6))
-    for (let k = 1; k < steps; k++) {
-      const a = a0 + (delta * k) / steps
-      const wp = clampRoom({ x: centre.x + Math.cos(a) * R, z: centre.z + Math.sin(a) * R })
-      if (others.some((o) => dist(o, wp) < 1.25)) continue
-      await h.walkTo(wp.x, wp.z, { tolerance: 0.45, timeout: 20000 })
-    }
-    return h.walkTo(target.x, target.z, { tolerance: 0.3, timeout: 20000 })
-  }
-
-  /**
-   * Push crate `id` onto its pad: approach from behind (on the pad→crate line),
-   * then walk toward the pad centre so the capsule shoves the crate ahead of it.
-   * Re-reads the crate and nudges until it is within `goal` of the pad.
-   */
-  async function pushCrate(id, { goal = 0.7, maxAttempts = 6 } = {}) {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await ensureLive()
-      const c = await crate(id)
-      const pad = { x: c.px, z: c.pz }
-      const d = dist(c, pad)
-      console.log(`   crate ${id}: ${d.toFixed(2)} from pad (attempt ${attempt})`)
-      if (d < goal) return { ok: true, attempts: attempt, d }
-      const dx = (c.x - pad.x) / d
-      const dz = (c.z - pad.z) / d
-      const approach = { x: c.x + dx * 1.5, z: c.z + dz * 1.5 }
-      await goBehind(c, approach)
-      // the crate rides ~0.87 ahead of the capsule, so stop the player just short of the pad centre
-      await h.walkTo(pad.x + dx * 0.95, pad.z + dz * 0.95, { tolerance: 0.45, timeout: 30000 })
-      await h.wait(700)
-    }
-    const c = await crate(id)
-    return { ok: false, attempts: maxAttempts, d: dist(c, { x: c.px, z: c.pz }) }
-  }
-
   // ── into the room ──────────────────────────────────────────────────────────
   await h.start()
   // record every toast so timing-sensitive checks don't race the 3.6 s auto-clear
@@ -225,8 +131,7 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
   check('reset console registered', !!reset, reset && `(${reset.x.toFixed(2)}, ${reset.z.toFixed(2)})`)
 
   // ── briefing ───────────────────────────────────────────────────────────────
-  check('walked to the briefing lectern', await h.walkTo(brief.x, brief.z, { tolerance: 1.2, timeout: 40000 }))
-  await waitFor(async () => (await h.state()).nearestId === 'console:tetratech', 6000)
+  check('walked to the briefing lectern', await h.approach('console:tetratech', brief.x, brief.z, { tolerance: 1.2 }))
   let s = await h.state()
   check('briefing prompt shows', s.nearestId === 'console:tetratech' && /briefing/i.test(s.nearestPrompt), s.nearestPrompt)
   await h.press('KeyE')

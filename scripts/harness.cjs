@@ -81,6 +81,23 @@ async function launch({ url = 'http://127.0.0.1:5173', out = 'shots', width = 11
       }, [x, z])
       await page.waitForTimeout(150)
     },
+    /**
+     * Walk to (x, z) and wait for `id` to become the highlighted interactable,
+     * re-walking if it does not. Software rendering makes a single walk's
+     * arrival time unpredictable, so tests that assert "I am standing at the
+     * thing" should use this rather than walkTo plus a fixed wait.
+     */
+    async approach(id, x, z, { tolerance = 1.3, attempts = 3, timeout = 45000, settle = 12000 } = {}) {
+      for (let i = 0; i < attempts; i++) {
+        await this.walkTo(x, z, { tolerance: tolerance + i * 0.25, timeout })
+        const ok = await page
+          .waitForFunction((wanted) => window.__game.state.nearestId === wanted, id, { timeout: settle })
+          .then(() => true)
+          .catch(() => false)
+        if (ok) return true
+      }
+      return false
+    },
     /** Walk to within `tolerance` of (x, z) by steering the camera and holding W. */
     async walkTo(x, z, { tolerance = 0.7, timeout = 25000, run = false } = {}) {
       const t0 = Date.now()

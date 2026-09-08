@@ -16,6 +16,7 @@
  */
 const path = require('path')
 const { launch } = require('../harness.cjs')
+const { crateDriver } = require('./lib/crates.cjs')
 
 const args = process.argv.slice(2)
 const url = args.find((a) => /^https?:/.test(a)) || 'http://127.0.0.1:5173'
@@ -64,7 +65,6 @@ const step = (msg) => console.log(`\n── ${msg}`)
     return false
   }
   const state = () => h.state()
-  const waitNearest = (id, timeout = 10000) => waitFor(async () => (await state()).nearestId === id, timeout)
   const waitOverlay = (kind, timeout = 10000) => waitFor(async () => { const s = await state(); return s.overlay && s.overlay.kind === kind }, timeout)
   const waitNoOverlay = (timeout = 10000) => waitFor(async () => !(await state()).overlay, timeout)
   const waitSolved = (id, timeout = 12000) => waitFor(async () => !!(await state()).solved[id], timeout)
@@ -99,15 +99,13 @@ const step = (msg) => console.log(`\n── ${msg}`)
   step('Every door but the first is sealed')
   for (const id of ORDER.slice(1)) {
     const d = polar(DOOR_ANGLE[id], APOTHEM - 2.2)
-    await h.walkTo(d.x, d.z, { tolerance: 1.2, timeout: 45000 })
-    await waitNearest(`door:${id}`)
+    await h.approach(`door:${id}`, d.x, d.z, { tolerance: 1.2 })
     const s = await state()
     check(`door ${NUMERAL[id]} is sealed`, s.nearestId === `door:${id}` && s.nearestPrompt === 'Sealed', s.nearestPrompt)
   }
   {
     const f = polar(DOOR_ANGLE.about, APOTHEM - 2.2)
-    await h.walkTo(f.x, f.z, { tolerance: 1.2, timeout: 45000 })
-    await waitNearest('door:about')
+    await h.approach('door:about', f.x, f.z, { tolerance: 1.2 })
     const s = await state()
     check('the finale door is sealed', s.nearestId === 'door:about' && s.nearestPrompt === 'Sealed', s.nearestPrompt)
     await h.press('KeyE')
@@ -121,8 +119,7 @@ const step = (msg) => console.log(`\n── ${msg}`)
 
     step(`Chamber ${NUMERAL[id]} · ${NAME[id]}`)
     const door = polar(theta, APOTHEM - 2.2)
-    check(`walked to door ${NUMERAL[id]}`, await h.walkTo(door.x, door.z, { tolerance: 1.2, timeout: 45000 }))
-    await waitNearest(`door:${id}`)
+    check(`walked to door ${NUMERAL[id]}`, await h.approach(`door:${id}`, door.x, door.z, { tolerance: 1.2 }))
     let s = await state()
     check(`door ${NUMERAL[id]} is unlocked now`, /^Open Chamber/.test(s.nearestPrompt), s.nearestPrompt)
     await h.press('KeyE')
@@ -141,8 +138,7 @@ const step = (msg) => console.log(`\n── ${msg}`)
     // ── solve it ────────────────────────────────────────────────────────────
     if (id === 'scotiabank') {
       const con = await item('console:scotiabank')
-      check('walked to the terminal', await h.walkTo(con.x, con.z, { tolerance: 1.3, timeout: 45000 }))
-      await waitNearest('console:scotiabank')
+      check('walked to the terminal', await h.approach('console:scotiabank', con.x, con.z))
       await h.press('KeyE')
       check('terminal overlay opened', await waitOverlay('puzzle'))
       await waitFor(async () => !!(await page.$('[data-testid=term-inputline]')), 12000)
@@ -166,8 +162,7 @@ const step = (msg) => console.log(`\n── ${msg}`)
 
     if (id === 'chalk') {
       const con = await item('console:chalk')
-      check('walked to the pipeline board', await h.walkTo(con.x, con.z, { tolerance: 1.3, timeout: 45000 }))
-      await waitNearest('console:chalk')
+      check('walked to the pipeline board', await h.approach('console:chalk', con.x, con.z))
       await h.press('KeyE')
       check('pipeline overlay opened', await waitOverlay('puzzle'))
       await page.waitForSelector('[data-node="open"]', { timeout: 20000 })
@@ -203,26 +198,21 @@ const step = (msg) => console.log(`\n── ${msg}`)
     }
 
     if (id === 'tetratech') {
-      const crates = () => page.evaluate(() => window.__game.crates())
-      const list = await crates()
+      // the same crate driver the chamber scenario uses: approach from behind,
+      // route around the other crates, retry until the pad is covered
+      const toLocalT = (wx, wz) => {
+        const th = ((theta - 90) * Math.PI) / 180
+        const o = polar(theta, APOTHEM)
+        const ddx = wx - o.x
+        const ddz = wz - o.z
+        return { x: ddx * Math.cos(th) - ddz * Math.sin(th), z: ddx * Math.sin(th) + ddz * Math.cos(th) }
+      }
+      const drv = crateDriver(h, { toLocal: toLocalT, toWorld: (lx, lz) => localToWorld(theta, lx, lz), log: (m) => console.log(m) })
+      const list = await drv.crates()
       check('three crates are in the room', list.length === 3)
       for (const c0 of list) {
-        let placed = false
-        for (let attempt = 0; attempt < 6 && !placed; attempt++) {
-          const c = (await crates()).find((k) => k.id === c0.id)
-          const pad = { x: c.px, z: c.pz }
-          const d = dist(c, pad)
-          if (d < 0.7) { placed = true; break }
-          const ux = (c.x - pad.x) / d
-          const uz = (c.z - pad.z) / d
-          // stand behind the crate on the crate→pad line, then push through the pad
-          await h.walkTo(c.x + ux * 1.9, c.z + uz * 1.9, { tolerance: 0.5, timeout: 30000 })
-          await h.walkTo(pad.x + ux * 0.95, pad.z + uz * 0.95, { tolerance: 0.45, timeout: 30000 })
-          await h.wait(800)
-          const after = (await crates()).find((k) => k.id === c0.id)
-          placed = dist(after, { x: after.px, z: after.pz }) < 0.7
-        }
-        check(`crate ${c0.id} pushed onto its pad`, placed)
+        const r = await drv.pushCrate(c0.id)
+        check(`crate ${c0.id} pushed onto its pad`, r.ok, `${r.d.toFixed(2)} from the pad after ${r.attempts} attempt(s)`)
       }
       check('all three pads filled solves chamber III', await waitSolved('tetratech'))
       await h.shot('31-crates')
@@ -230,8 +220,7 @@ const step = (msg) => console.log(`\n── ${msg}`)
 
     if (id === 'insightai') {
       const con = await item('console:insightai')
-      check('walked to the keypad', await h.walkTo(con.x, con.z, { tolerance: 1.3, timeout: 45000 }))
-      await waitNearest('console:insightai')
+      check('walked to the keypad', await h.approach('console:insightai', con.x, con.z))
       await h.press('KeyE')
       check('keypad overlay opened', await waitOverlay('puzzle'))
       await page.waitForSelector('[data-key="1"]', { timeout: 15000 })
@@ -253,8 +242,7 @@ const step = (msg) => console.log(`\n── ${msg}`)
       for (const lamp of lamps) {
         const key = lamp.id.split(':')[2]
         for (const [lx, lz] of aisle[key] || []) await walkLocal(theta, lx, lz, { tolerance: 1.5 })
-        await h.walkTo(lamp.x, lamp.z, { tolerance: 1.5, timeout: 45000 })
-        await waitNearest(lamp.id)
+        check(`reached ${key}`, await h.approach(lamp.id, lamp.x, lamp.z, { tolerance: 1.5 }))
         await h.press('KeyE')
         check(`lit ${key}`, await waitFor(async () => !!(await state()).flags[lamp.id], 6000))
       }
@@ -266,8 +254,7 @@ const step = (msg) => console.log(`\n── ${msg}`)
     await h.goto('hub')
     check(`returned to the hub from chamber ${NUMERAL[id]}`, await waitFor(async () => dist(await h.player(), { x: 0, z: 2.5 }) < 3, 12000, 250))
     const v = polar(VAULT_ANGLE[id], APOTHEM - 3.2)
-    check(`walked to vault ${NUMERAL[id]}`, await h.walkTo(v.x, v.z, { tolerance: 1.1, timeout: 45000 }))
-    await waitNearest(`vault:${id}`)
+    check(`walked to vault ${NUMERAL[id]}`, await h.approach(`vault:${id}`, v.x, v.z, { tolerance: 1.1 }))
     s = await state()
     check(`vault ${NUMERAL[id]} offers to open`, /Open the/.test(s.nearestPrompt), s.nearestPrompt)
     await h.shot(`${n + 1}2-vault-${id}`)
@@ -286,8 +273,7 @@ const step = (msg) => console.log(`\n── ${msg}`)
   // ── the finale ────────────────────────────────────────────────────────────
   step('The finale')
   const f = polar(DOOR_ANGLE.about, APOTHEM - 2.2)
-  check('walked to the finale door', await h.walkTo(f.x, f.z, { tolerance: 1.2, timeout: 45000 }))
-  await waitNearest('door:about')
+  check('walked to the finale door', await h.approach('door:about', f.x, f.z, { tolerance: 1.2 }))
   let s = await state()
   check('the finale door unsealed after five reveals', /^Open Chamber/.test(s.nearestPrompt), s.nearestPrompt)
   await h.shot('60-finale-door')
@@ -295,8 +281,7 @@ const step = (msg) => console.log(`\n── ${msg}`)
   check('the finale door opened', await waitFor(async () => !!(await state()).openedDoors['door:about'], 6000))
   check('entered the closing room', await gotoRoom('about'))
   const mono = await item('about:monolith')
-  check('walked to the monolith', await h.walkTo(mono.x, mono.z, { tolerance: 1.4, timeout: 45000 }))
-  await waitNearest('about:monolith')
+  check('walked to the monolith', await h.approach('about:monolith', mono.x, mono.z, { tolerance: 1.4 }))
   await h.press('KeyE')
   check('the about panel opened', await waitOverlay('about'))
   await h.wait(1500)
