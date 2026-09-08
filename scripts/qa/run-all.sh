@@ -10,7 +10,7 @@ URL="${1:-http://127.0.0.1:5173}"
 OUT="${2:-shots}"
 cd "$(dirname "$0")/../.."
 
-SCENARIOS=(e2e-flow terminal pipeline blocks keypad lanterns ui reset-flow edge-cases full-playthrough)
+SCENARIOS=(e2e-flow terminal pipeline blocks keypad lanterns ui dossier reset-flow edge-cases full-playthrough)
 FAILED=()
 for name in "${SCENARIOS[@]}"; do
   script="scripts/qa/${name}.cjs"
