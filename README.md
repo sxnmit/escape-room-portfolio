@@ -63,17 +63,23 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full map. In short:
 `scripts/harness.cjs` drives the game in headless Chromium (software WebGL) through a small automation API exposed on `window.__game`. `scripts/e2e-flow.cjs` walks the whole progression loop; `scripts/qa/*.cjs` play each chamber for real (typing into the terminal, dragging pipeline nodes, pushing crates, pressing keypad keys, lighting lamps), check the panels on desktop and the joystick on a phone-sized viewport, and take screenshots:
 
 ```bash
+npm i -D playwright && npx playwright install chromium   # once
 npx vite --port 5173 &
-node scripts/e2e-flow.cjs shots/e2e http://127.0.0.1:5173
-node scripts/qa/terminal.cjs shots/terminal http://127.0.0.1:5173
-node scripts/qa/pipeline.cjs http://127.0.0.1:5173 shots/pipeline
-node scripts/qa/blocks.cjs http://127.0.0.1:5173 shots/blocks
-node scripts/qa/keypad.cjs http://127.0.0.1:5173 shots/keypad
-node scripts/qa/lanterns.cjs http://127.0.0.1:5173 shots/lanterns
-node scripts/qa/ui.cjs http://127.0.0.1:5173 shots/ui
-node scripts/qa/visuals.cjs http://127.0.0.1:5173 shots/visuals
+bash scripts/qa/run-all.sh http://127.0.0.1:5173 shots   # every scenario
 ```
 
-Each script prints `PASS`/`FAIL` lines and exits non-zero on a failure or a console error.
+Or run one at a time — each takes a URL and an output directory:
+
+| Script | What it covers |
+| --- | --- |
+| `qa/full-playthrough.cjs` | the entire game start to finish, real input only (never calls `solve`) |
+| `e2e-flow.cjs` | the progression loop: sealed doors, solve, vault, reveal, next door |
+| `qa/terminal.cjs` · `qa/pipeline.cjs` · `qa/blocks.cjs` · `qa/keypad.cjs` · `qa/lanterns.cjs` | one chamber each, played for real |
+| `qa/ui.cjs` | desktop panels plus a phone-sized run driving the virtual joystick |
+| `qa/reset-flow.cjs` | Start over / Play again really reopens the world, not just the store |
+| `qa/edge-cases.cjs` | impatient input: closing overlays mid-animation, mashing Enter, reopening a solved puzzle |
+| `qa/visuals.cjs` | screenshots in normal and `?lite` modes |
+
+Each prints `PASS`/`FAIL` lines and exits non-zero on a failure or a console error. Software WebGL runs at a few frames per second, so a full run takes a while; the scripts wait on game state rather than fixed timers.
 
 Requires Playwright's Chromium to be installed (`npx playwright install chromium`).
