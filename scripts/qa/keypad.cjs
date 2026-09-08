@@ -220,17 +220,18 @@ async function waitFrames(page, n = 4, timeout = 60000) {
   }
   check('state.solved.insightai within 3 s', solvedInTime, `${Date.now() - t0} ms`)
   check('display shows GRANTED', await waitStatus('granted', 2000), JSON.stringify(await display()))
-  // The host closes the overlay ~2.2 s after the solve and a screenshot needs a compositor frame (≈1 s at 1–2 fps),
-  // so take the live GRANTED shot straight away; only a fast renderer gets the pause for the shackle to land.
-  if (!slow) await page.waitForTimeout(800)
-  await page.screenshot({ path: path.join(out, '08-granted.png') })
-  const lockOpen = await page.$eval('svg[data-open]', (el) => el.dataset.open).catch(() => null)
-  check('padlock is open', lockOpen === '1', lockOpen)
-  const disabled = await page.$$eval('[data-key]', (els) => els.every((e) => e.disabled))
+  // The host closes the overlay ~2.2 s after the solve, and a screenshot costs a
+  // compositor frame (≈1 s at 1–2 fps) — so assert the granted UI first and
+  // photograph it afterwards, or the assertions race the auto-close.
+  const lockOpen = await waitFor(() => page.$eval('svg[data-open]', (el) => el.dataset.open === '1').catch(() => false), 1600, 60)
+  check('padlock is open', lockOpen)
+  const disabled = await page.$$eval('[data-key]', (els) => els.every((e) => e.disabled)).catch(() => false)
   check('keys disabled once granted', disabled)
-  // the success line follows the instructions' exit animation (rAF-driven, so slow on a starved renderer): poll in real time
-  const successShown = await waitFor(() => page.evaluate(() => !!document.querySelector('[data-testid=keypad-success]')), 6000, 60)
-  check('success line shown', successShown)
+  // The success line replaces the instructions through an AnimatePresence
+  // "wait" swap, so it only mounts once the outgoing copy has finished exiting
+  // — rAF work that can outlast the host's 2.2 s auto-close at 1–2 fps. It is
+  // asserted on the re-opened keypad below, where it renders immediately.
+  await page.screenshot({ path: path.join(out, '08-granted.png') })
 
   // host closes the overlay ~2.2 s after the solve
   let closed = true
@@ -254,6 +255,8 @@ async function waitFrames(page, n = 4, timeout = 60000) {
   d = await display()
   check('re-opened keypad shows GRANTED with the code', d && d.status === 'granted' && d.entered === CODE.length, JSON.stringify(d))
   check('re-opened keys are disabled', await page.$$eval('[data-key]', (els) => els.every((e) => e.disabled)))
+  const successText = await page.$eval('[data-testid=keypad-success]', (el) => el.textContent).catch(() => null)
+  check('success line shown on the granted keypad', !!successText && /unlocked/i.test(successText), successText)
   await h.shot('10-reopened-solved', { settle: 400 })
   await h.press('Escape')
   s = await h.state()

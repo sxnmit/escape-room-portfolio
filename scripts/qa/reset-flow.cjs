@@ -75,16 +75,24 @@ const step = (m) => console.log(`\n── ${m}`)
   // and the crates must be pushable again (i.e. dynamic, not fixed)
   step('The puzzle is playable a second time')
   const c0 = (await blocks()).crates[0]
-  const pad = { x: c0.px, z: c0.pz }
-  const d = dist(c0, pad)
-  const ux = (c0.x - pad.x) / d
-  const uz = (c0.z - pad.z) / d
-  await h.walkTo(c0.x + ux * 1.9, c0.z + uz * 1.9, { tolerance: 0.5, timeout: 30000 })
-  await h.walkTo(pad.x + ux * 0.95, pad.z + uz * 0.95, { tolerance: 0.45, timeout: 30000 })
-  await h.wait(900)
+  const spawn = { x: c0.x, z: c0.z }
+  let placed = false
+  for (let attempt = 0; attempt < 5 && !placed; attempt++) {
+    const c = (await blocks()).crates.find((k) => k.id === c0.id)
+    const pad = { x: c.px, z: c.pz }
+    const d = dist(c, pad)
+    if (d < 0.7) { placed = true; break }
+    const ux = (c.x - pad.x) / d
+    const uz = (c.z - pad.z) / d
+    await h.walkTo(c.x + ux * 1.9, c.z + uz * 1.9, { tolerance: 0.5, timeout: 40000 })
+    await h.walkTo(pad.x + ux * 0.95, pad.z + uz * 0.95, { tolerance: 0.45, timeout: 40000 })
+    await h.wait(900)
+    placed = onPad((await blocks()).crates.find((k) => k.id === c0.id))
+  }
   const moved = (await blocks()).crates.find((c) => c.id === c0.id)
-  check('a crate can be pushed after the reset', dist(moved, { x: c0.x, z: c0.z }) > 0.8, `moved ${dist(moved, { x: c0.x, z: c0.z }).toFixed(2)}`)
-  check('pad detection runs again', (await blocks()).fill.some((f) => f > 0) || onPad(moved), JSON.stringify((await blocks()).fill))
+  check('a crate can be pushed after the reset', dist(moved, spawn) > 0.8, `moved ${dist(moved, spawn).toFixed(2)}`)
+  check('it can be placed on its pad again', placed, `${dist(moved, { x: moved.px, z: moved.pz }).toFixed(2)} from the pad`)
+  check('pad detection runs again', await waitFor(async () => (await blocks()).fill.some((f) => f > 0.5), 6000), JSON.stringify((await blocks()).fill))
   await h.shot('03-pushable-again')
 
   step('The hub reopened as well')
