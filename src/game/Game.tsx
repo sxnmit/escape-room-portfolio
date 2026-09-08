@@ -13,9 +13,9 @@ import { Bursts } from './fx/Burst'
 import { LightBudget } from './fx/LightBudget'
 
 export function Game() {
-  // 1 = the machine is keeping up, 0 = it is struggling. Drives resolution and
-  // whether the bloom pass runs at all.
-  const [quality, setQuality] = useState(1)
+  // Quality tier: 2 = comfortable, 0 = struggling. Drives resolution, the light
+  // budget and whether the bloom pass runs at all.
+  const [tier, setTier] = useState(TIERS.length - 1)
   return (
     <Canvas
       shadows={!LITE}
@@ -40,42 +40,61 @@ export function Game() {
         </Physics>
         <Bursts />
       </Suspense>
-      <FxGate quality={quality} />
-      <Quality onChange={setQuality} />
+      <FxGate bloom={TIERS[tier].bloom} />
+      <Quality onTier={setTier} />
       {/* the strongest lever there is: fewer live lights, fewer per-pixel loops.
           8 keeps every glow you can actually see; a struggling machine gets 4. */}
-      <LightBudget budget={quality > 0.6 ? 8 : quality > 0.3 ? 6 : 4} />
+      <LightBudget budget={TIERS[tier].budget} />
       <DebugBridge />
     </Canvas>
   )
 }
 
-function FxGate({ quality }: { quality: number }) {
+function FxGate({ bloom }: { bloom: boolean }) {
   const fx = useGame((s) => s.fx)
   // bloom is a full-screen pass; on a machine that is already behind it is the
   // first thing to go, whatever the player's preference
-  return fx && !LITE && quality > 0.35 ? <Effects /> : null
+  return fx && !LITE && bloom ? <Effects /> : null
 }
 
+/** Resolution and light budget per tier: 0 = struggling, 2 = comfortable. */
+const TIERS = [
+  { dpr: 0.8, budget: 4, bloom: false },
+  { dpr: 1.1, budget: 6, bloom: true },
+  { dpr: 1.5, budget: 8, bloom: true },
+]
+
 /**
- * Watches the real frame rate and trades resolution for smoothness. Automation
- * pins the resolution itself (see DebugBridge), so it stands down once
- * window.__game.setDpr has been called.
+ * Watches the real frame rate and steps quality up or down a tier at a time.
+ *
+ * Deliberately coarse and sticky. Changing the light budget changes the
+ * shaders' compile-time constants, so a quality signal that tracked frame rate
+ * continuously would recompile every material each time it wobbled across a
+ * threshold — and each recompile is a stutter, which is exactly the thing it is
+ * meant to prevent. Tiers move one step at a time, only on drei's sustained
+ * decline/incline signals, and `onFallback` pins the lowest tier for good once
+ * the machine has flip-flopped enough to prove it cannot hold a middle setting.
+ *
+ * Automation pins the resolution itself (see DebugBridge), so it leaves the DPR
+ * alone once window.__game.setDpr has been called.
  */
-function Quality({ onChange }: { onChange: (q: number) => void }) {
+function Quality({ onTier }: { onTier: (tier: number) => void }) {
   const setDpr = useThree((s) => s.setDpr)
-  const last = useRef(1)
+  const tier = useRef(2)
+  const apply = (next: number) => {
+    const clamped = Math.max(0, Math.min(TIERS.length - 1, next))
+    if (clamped === tier.current) return
+    tier.current = clamped
+    onTier(clamped)
+    if ((window as unknown as { __autoDpr?: boolean }).__autoDpr !== false) setDpr(TIERS[clamped].dpr)
+  }
   if (LITE) return null
   return (
     <PerformanceMonitor
-      onChange={({ factor }) => {
-        onChange(factor)
-        if ((window as unknown as { __autoDpr?: boolean }).__autoDpr === false) return
-        const dpr = Math.round((0.8 + factor * 0.7) * 20) / 20
-        if (Math.abs(dpr - last.current) < 0.05) return
-        last.current = dpr
-        setDpr(dpr)
-      }}
+      flipflops={3}
+      onDecline={() => apply(tier.current - 1)}
+      onIncline={() => apply(tier.current + 1)}
+      onFallback={() => apply(0)}
     />
   )
 }

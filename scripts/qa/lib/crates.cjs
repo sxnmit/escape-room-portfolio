@@ -108,7 +108,7 @@ function crateDriver(h, { toLocal, toWorld, ensureLive = async () => true, log =
    * line, then walk at the pad so the capsule shoves the crate ahead of it.
    * Re-reads the crate and nudges until it is within `goal` of the pad.
    */
-  async function pushCrate(id, { goal = 0.7, maxAttempts = 8, confirm = 8000 } = {}) {
+  async function pushCrate(id, { goal = 0.7, maxAttempts = 12, confirm = 8000 } = {}) {
     const read = async () => {
       const c = await crate(id)
       return c ? { c, d: dist(c, { x: c.px, z: c.pz }), placed: !!c.placed } : { c: null, d: Infinity, placed: false }
