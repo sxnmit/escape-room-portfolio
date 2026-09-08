@@ -10,8 +10,10 @@ const results = []
 const check = (name, cond, extra = '') => { results.push([name, !!cond]); console.log(`${cond ? 'PASS' : 'FAIL'}  ${name} ${extra}`) }
 
 ;(async () => {
-  const out = process.argv[2] || 'shots/e2e'
-  const url = process.argv[3] || 'http://127.0.0.1:5173'
+  const args = process.argv.slice(2)
+  // either argument order works: the one starting with http is the url
+  const url = args.find((a) => /^https?:/.test(a)) || 'http://127.0.0.1:5173'
+  const out = args.find((a) => !/^https?:/.test(a)) || 'shots/e2e'
   const h = await launch({ url, out })
   await h.start()
 

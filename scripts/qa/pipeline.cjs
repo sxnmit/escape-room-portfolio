@@ -9,8 +9,10 @@
 const path = require('path')
 const { launch } = require('../harness.cjs')
 
-const url = process.argv[2] || 'http://127.0.0.1:5182'
-const out = process.argv[3] || path.join(__dirname, '..', '..', 'shots', 'pipeline')
+const args = process.argv.slice(2)
+// either argument order works: the one starting with http is the url
+const url = args.find((a) => /^https?:/.test(a)) || 'http://127.0.0.1:5182'
+const out = args.find((a) => !/^https?:/.test(a)) || path.join(__dirname, '..', '..', 'shots', 'pipeline')
 const results = []
 const check = (name, cond, extra = '') => {
   results.push([name, !!cond])

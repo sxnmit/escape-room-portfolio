@@ -15,8 +15,10 @@ const check = (name, cond, extra = '') => {
 }
 
 ;(async () => {
-  const out = process.argv[2] || 'shots/terminal'
-  const url = process.argv[3] || 'http://127.0.0.1:5173'
+  const args = process.argv.slice(2)
+  // either argument order works: the one starting with http is the url
+  const url = args.find((a) => /^https?:/.test(a)) || 'http://127.0.0.1:5173'
+  const out = args.find((a) => !/^https?:/.test(a)) || 'shots/terminal'
   const h = await launch({ url, out })
   const page = h.page
 
