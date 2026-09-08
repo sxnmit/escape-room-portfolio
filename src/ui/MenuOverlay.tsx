@@ -25,7 +25,16 @@ export function MenuOverlay() {
           <button className="btn ghost" onClick={close}>Resume <kbd className="key">Esc</kbd></button>
         </div>
 
-        <div style={{ marginTop: 18, display: 'grid', gap: 8 }}>
+        <button
+          className="btn primary"
+          data-testid="menu-dossier"
+          style={{ marginTop: 16, width: '100%', justifyContent: 'center' }}
+          onClick={() => { openOverlay({ kind: 'dossier' }); sfx.play('ui') }}
+        >
+          📄 Read the résumé so far
+        </button>
+
+        <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>
           {CHAMBER_ORDER.map((id) => {
             const c = CHAMBERS[id]
             const state = revealed[id] ? 'Revealed' : solved[id] ? 'Solved — vault waiting in the hub' : 'Not yet'

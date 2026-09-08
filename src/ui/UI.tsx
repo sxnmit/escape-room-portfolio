@@ -7,6 +7,7 @@ import { MenuOverlay } from './MenuOverlay'
 import { ResumePanel } from './ResumePanel'
 import { AboutPanel } from './AboutPanel'
 import { PuzzleHost } from './PuzzleHost'
+import { DossierPanel } from './DossierPanel'
 import { BriefingCard } from './BriefingCard'
 import { sfx } from '@/audio/sfx'
 import { TouchControls } from './TouchControls'
@@ -45,6 +46,7 @@ export function UI() {
       <AnimatePresence mode="wait">
         {overlay?.kind === 'intro' && <IntroScreen key="intro" />}
         {overlay?.kind === 'menu' && <MenuOverlay key="menu" />}
+        {overlay?.kind === 'dossier' && <DossierPanel key="dossier" />}
         {overlay?.kind === 'puzzle' && <PuzzleHost key={`puzzle-${overlay.chamber}`} chamber={overlay.chamber} />}
         {overlay?.kind === 'briefing' && <BriefingCard key={`brief-${overlay.chamber}`} chamber={overlay.chamber} />}
         {overlay?.kind === 'resume' && <ResumePanel key={`resume-${overlay.chamber}`} chamber={overlay.chamber} />}

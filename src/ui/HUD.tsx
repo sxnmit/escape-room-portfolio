@@ -97,6 +97,9 @@ function TopRight() {
         <button style={{ ...btn, opacity: fx ? 1 : 0.6 }} title={fx ? 'Disable glow effects' : 'Enable glow effects'} onClick={() => { toggleFx(); sfx.play('ui') }}>
           ✨
         </button>
+        <button style={btn} title="Résumé so far" aria-label="Open the résumé" data-testid="hud-dossier" onClick={() => { openOverlay({ kind: 'dossier' }); sfx.play('ui') }}>
+          📄
+        </button>
         <button style={btn} title="Menu (Esc)" onClick={() => { openOverlay({ kind: 'menu' }); sfx.play('ui') }}>
           ☰
         </button>

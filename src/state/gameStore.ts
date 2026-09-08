@@ -5,6 +5,7 @@ import { CHAMBER_ORDER, CHAMBERS, type ChamberId } from '@/data/resume'
 export type Overlay =
   | { kind: 'intro' }
   | { kind: 'menu' }
+  | { kind: 'dossier' }
   | { kind: 'puzzle'; chamber: ChamberId }
   | { kind: 'briefing'; chamber: ChamberId }
   | { kind: 'resume'; chamber: ChamberId }
