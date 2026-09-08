@@ -50,7 +50,9 @@ function WallMesh({ seg }: { seg: WallSeg }) {
   const lintel = seg.kind === 'lintel'
   return (
     <group position={seg.position} rotation={[0, seg.rotationY, 0]}>
-      <mesh material={lintel ? lintelMat : wallMat} castShadow receiveShadow>
+      {/* walls receive but do not cast: they were ~150 of the scene's shadow
+          casters and the camera almost never sees a wall's own shadow */}
+      <mesh material={lintel ? lintelMat : wallMat} receiveShadow>
         <boxGeometry args={[w, h, t]} />
       </mesh>
       {!lintel && (
