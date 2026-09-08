@@ -36,6 +36,8 @@ export function DataPulse({ track, accent, duration = 1600, gap = 420, delay = 0
 
     // ── events: a timer per node arrival + one for the pass end, re-armed every cycle ──
     const schedule = (pass: number) => {
+      // every timer from the previous pass has already fired by now
+      timers.length = 0
       const base = delay + pass * cycle
       track.nodeAt.forEach((s, i) => {
         timers.push(window.setTimeout(() => cb.current.onNode?.(i, pass), base + (s / (track.total || 1)) * duration))

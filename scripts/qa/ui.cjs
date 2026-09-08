@@ -5,8 +5,7 @@
  *   node scripts/qa/ui.cjs http://127.0.0.1:5173 /path/to/shots
  */
 const path = require('path')
-const { chromium } = require('/opt/node22/lib/node_modules/playwright')
-const { launch } = require('../harness.cjs')
+const { launch, chromium } = require('../harness.cjs')
 const args = process.argv.slice(2)
 const url = args.find((a) => /^https?:/.test(a)) || 'http://127.0.0.1:5173'
 const out = args.find((a) => !/^https?:/.test(a)) || path.join(__dirname, '..', '..', 'shots', 'ui')

@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
@@ -61,6 +61,15 @@ export function ResumeVault({ chamber }: { chamber: ChamberId }) {
     },
     anchor,
   )
+
+  // progress reset while the hub stayed mounted: reseal, and let the sequence replay
+  useEffect(() => {
+    if (solved) return
+    const s = seq.current
+    s.played = false
+    s.burst = false
+    s.start = -100
+  }, [solved])
 
   useFrame((st, rawDt) => {
     const dt = Math.min(rawDt, 1 / 20)

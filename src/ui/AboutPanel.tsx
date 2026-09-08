@@ -52,7 +52,7 @@ export function AboutPanel() {
           ))}
         </motion.div>
 
-        <div style={{ padding: '22px 32px 28px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ position: 'sticky', bottom: 0, padding: '18px 32px 22px', marginTop: 4, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: 'linear-gradient(to top, var(--panel) 68%, transparent)', backdropFilter: 'blur(6px)' }}>
           <div style={{ fontFamily: 'var(--serif)', fontSize: 18, fontStyle: 'italic', color: 'var(--gold)', flex: 1 }}>{ABOUT.closing}</div>
           <button className="btn ghost" onClick={() => { reset(); requestTeleport(0, 2.5, 0); close(); sfx.play('ui') }}>Play again</button>
           <button className="btn primary" onClick={() => { close(); sfx.play('ui') }}>Close</button>

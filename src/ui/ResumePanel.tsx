@@ -22,6 +22,9 @@ export function ResumePanel({ chamber }: { chamber: ChamberId }) {
   }, [chamber, reveal, wasRevealed])
 
   const onClose = () => {
+    // reveal before closing: the 600 ms timer above is cancelled on unmount, and
+    // this is the only thing that unlocks the next door
+    if (!wasRevealed) reveal(chamber)
     close()
     if (wasRevealed) return
     const s = useGame.getState()
@@ -34,7 +37,7 @@ export function ResumePanel({ chamber }: { chamber: ChamberId }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Enter') {
+      if (e.code === 'Enter' && !e.repeat) {
         e.preventDefault()
         onClose()
       }
@@ -122,7 +125,7 @@ export function ResumePanel({ chamber }: { chamber: ChamberId }) {
           ))}
         </motion.div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: '20px 30px 26px', flexWrap: 'wrap' }}>
+        <div style={{ position: 'sticky', bottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: '16px 30px 22px', marginTop: 4, flexWrap: 'wrap', background: 'linear-gradient(to top, var(--panel) 68%, transparent)', backdropFilter: 'blur(6px)' }}>
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }} style={{ fontSize: 13, color: 'var(--muted)', flex: 1, minWidth: 200 }}>
             {wasRevealed ? 'Recovered earlier — re-read any chapter from the pause menu.' : nextText}
           </motion.div>

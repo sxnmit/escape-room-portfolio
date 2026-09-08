@@ -372,8 +372,7 @@ function FunnelHologram({ position, rotationY, solved }: { position: [number, nu
       cloud.current.rotation.y = Math.sin(t * 0.35) * 0.12
     }
     bars.current.forEach((b, i) => {
-      if (!b) b = null
-      if (!b) return
+            if (!b) return
       b.position.y = BAR_ROWS[i].y + Math.sin(t * 1.6 + i * 0.9) * 0.018
       const pulse = 1 + Math.sin(t * 2.2 + i) * 0.012
       b.scale.set(BAR_ROWS[i].w * pulse, 0.17, 0.32)

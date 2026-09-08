@@ -79,6 +79,7 @@ export function Player() {
   const frame = useRef(0)
   const lastCelebrate = useRef(0)
 
+  const camRay = useRef(new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }))
   const tmp = useMemo(
     () => ({
       pos: new THREE.Vector3(),
@@ -173,9 +174,7 @@ export function Player() {
   const celebrate = useGame((s) => s.celebrate)
   useEffect(() => {
     if (celebrate !== lastCelebrate.current) {
-      const first = lastCelebrate.current === 0
       lastCelebrate.current = celebrate
-      if (first && celebrate === 0) return
       anim.current.celebrateAt = anim.current.time
       const p = playerSnapshot.position
       spawnBurst([p.x, p.y + 1.2, p.z], '#ffd166')
@@ -289,7 +288,13 @@ export function Player() {
     let dist = c.dist
     // pull the camera in when a wall sits between it and the player
     const dirN = tmp.dir.copy(tmp.offset).normalize()
-    const ray = new rapier.Ray({ x: target3.x, y: target3.y, z: target3.z }, { x: dirN.x, y: dirN.y, z: dirN.z })
+    const ray = camRay.current
+    ray.origin.x = target3.x
+    ray.origin.y = target3.y
+    ray.origin.z = target3.z
+    ray.dir.x = dirN.x
+    ray.dir.y = dirN.y
+    ray.dir.z = dirN.z
     const hit = world.castRay(
       ray,
       c.dist,

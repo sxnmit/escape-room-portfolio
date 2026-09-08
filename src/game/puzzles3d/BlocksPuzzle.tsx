@@ -276,6 +276,9 @@ interface PuzzleRefs {
   stripsDirty: boolean
 }
 
+/** Reset console button: live red, greyed while the chamber is locked. */
+const RESET_BUTTON_COLOR = '#ff5c5c'
+
 const STRIPS_PER_SIDE = 14
 const STRIP_Z0 = -8.2
 const STRIP_DZ = 1.05
@@ -329,7 +332,7 @@ export function BlocksPuzzle() {
     () => ({
       ring: new THREE.MeshStandardMaterial({ color: ACCENT, emissive: ACCENT, emissiveIntensity: 1.2, toneMapped: false }),
       sheet: new THREE.MeshBasicMaterial({ map: deliverableTexture(), transparent: true, opacity: 0.96, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }),
-      button: new THREE.MeshStandardMaterial({ color: '#ff5c5c', emissive: '#ff5c5c', emissiveIntensity: 1.2, roughness: 0.3, toneMapped: false }),
+      button: new THREE.MeshStandardMaterial({ color: RESET_BUTTON_COLOR, emissive: RESET_BUTTON_COLOR, emissiveIntensity: 1.2, roughness: 0.3, toneMapped: false }),
     }),
     [],
   )
@@ -388,8 +391,33 @@ export function BlocksPuzzle() {
     [rapier],
   )
   useEffect(() => {
-    if (solved) beginLock(false)
-  }, [solved, beginLock])
+    if (solved) {
+      beginLock(false)
+      return
+    }
+    // progress was reset while the world stayed mounted: unlatch everything the
+    // lock froze, or the room can never be solved again this session
+    const s = st.current
+    if (!s.locked) return
+    s.locked = false
+    s.lockT = 0
+    s.solveT = 0
+    s.stripsDirty = true
+    genMats.button.color.set(RESET_BUTTON_COLOR)
+    for (let i = 0; i < N; i++) {
+      s.filled[i] = false
+      s.fill[i] = 0
+      s.fixed[i] = false
+      const b = bodies.current[i]
+      if (!b) continue
+      b.setBodyType(rapier.RigidBodyType.Dynamic, true)
+      const p = startWorld[i]
+      b.setTranslation({ x: p.x, y: p.y, z: p.z }, true)
+      b.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      b.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      b.wakeUp()
+    }
+  }, [solved, beginLock, rapier, startWorld, genMats])
 
   const resetCrates = useCallback(() => {
     const s = st.current

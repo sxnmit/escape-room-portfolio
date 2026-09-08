@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 
 export interface TextTextureOptions {
@@ -88,9 +88,12 @@ export function TextPlane({
   renderOrder,
   ...opts
 }: TextPlaneProps) {
-  const key = JSON.stringify([opts.text, opts.font, opts.color, opts.background, opts.width, opts.height, opts.align, opts.glow])
+  const key = JSON.stringify([opts.text, opts.font, opts.color, opts.background, opts.width, opts.height, opts.align, opts.glow, opts.lineHeight, opts.padding])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const texture = useMemo(() => makeTextTexture(opts), [key])
+  // signage is re-rendered when its text changes (progress counters, status
+  // plates); release the canvas the old texture held
+  useEffect(() => () => texture.dispose(), [texture])
   return (
     <mesh position={position} rotation={rotation} renderOrder={renderOrder}>
       <planeGeometry args={size} />

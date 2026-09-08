@@ -247,8 +247,14 @@ export function roomAt(x: number, z: number): ChamberId | 'about' | 'hub' {
   return 'hub'
 }
 
+/**
+ * World point → frame-local coordinates. The rotation is planar, so this is
+ * plain scalar maths: it runs for every spoke on the player's room check.
+ */
 export function worldToFrame(f: Frame, x: number, z: number) {
-  const v = new THREE.Vector3(x - f.origin.x, 0, z - f.origin.z)
-  v.applyAxisAngle(new THREE.Vector3(0, 1, 0), -f.rotationY)
-  return { x: v.x, z: v.z }
+  const dx = x - f.origin.x
+  const dz = z - f.origin.z
+  const c = Math.cos(-f.rotationY)
+  const s = Math.sin(-f.rotationY)
+  return { x: dx * c + dz * s, z: -dx * s + dz * c }
 }

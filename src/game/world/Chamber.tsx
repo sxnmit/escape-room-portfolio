@@ -2,7 +2,8 @@ import { useMemo, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { CHAMBERS, type ChamberId } from '@/data/resume'
-import { CORRIDOR_LEN, CORRIDOR_W, ROOM_SIZE, SPOKES, WALL_H } from './layout'
+import { CORRIDOR_LEN, CORRIDOR_W, ROOM_SIZE, SPOKES, WALL_H, worldToFrame } from './layout'
+import { playerSnapshot } from '@/game/Player'
 import { useGame } from '@/state/gameStore'
 import { makeGridTexture } from '@/utils/textures'
 
@@ -81,6 +82,10 @@ function EntrySensor({ id, z }: { id: ChamberId | 'about'; z: number }) {
         position={[0, 2, z]}
         onIntersectionEnter={({ other }) => {
           if (!other.rigidBodyObject?.userData?.player) return
+          // the sensor spans the corridor and fires in both directions; only
+          // greet the player when they cross it heading away from the hub
+          const p = playerSnapshot.position
+          if (worldToFrame(SPOKES[id].frame, p.x, p.z).z <= z) return
           const g = useGame.getState()
           if (id === 'about') {
             g.showBanner({ numeral: 'VI', title: 'The finale', subtitle: 'About Sunny', accent: '#ffd166' })

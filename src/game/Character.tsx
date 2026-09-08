@@ -48,6 +48,7 @@ export function Character({ anim, headingRef }: { anim: React.RefObject<Characte
       accent: new THREE.MeshStandardMaterial({ color: ACCENT, emissive: ACCENT, emissiveIntensity: 1.6, roughness: 0.3 }),
       eye: new THREE.MeshBasicMaterial({ color: '#9ff5ff' }),
       shadow: new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.35, depthWrite: false }),
+      antennaTip: new THREE.MeshStandardMaterial({ color: ACCENT, emissive: ACCENT, emissiveIntensity: 1.6, roughness: 0.3 }),
     }),
     [],
   )
@@ -252,7 +253,7 @@ export function Character({ anim, headingRef }: { anim: React.RefObject<Characte
             <mesh position-y={0.14} material={mats.dark}>
               <cylinderGeometry args={[0.02, 0.025, 0.28, 8]} />
             </mesh>
-            <mesh ref={antennaTip} position-y={0.32} material={mats.accent.clone()}>
+            <mesh ref={antennaTip} position-y={0.32} material={mats.antennaTip}>
               <sphereGeometry args={[0.07, 12, 12]} />
             </mesh>
           </group>

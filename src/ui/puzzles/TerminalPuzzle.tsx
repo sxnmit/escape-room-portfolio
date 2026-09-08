@@ -103,6 +103,8 @@ export function TerminalPuzzle({ chamber, onSolved, solved }: PuzzleProps) {
   }, [bootChars, bootDone, solved, push])
 
   // ── focus management ─────────────────────────────────────────────────────
+  const solvedAtMount = useRef(solved).current
+  const fireRef = useRef<() => void>(() => {})
   useEffect(() => {
     inputRef.current?.focus({ preventScroll: true })
     return () => {
@@ -110,8 +112,11 @@ export function TerminalPuzzle({ chamber, onSolved, solved }: PuzzleProps) {
       intervals.current.forEach(clearInterval)
       timers.current.clear()
       intervals.current.clear()
+      // the player typed the right key but closed the shell mid-animation:
+      // the unseal still counts
+      if (!solvedAtMount && engine.current.solved) fireRef.current()
     }
-  }, [])
+  }, [solvedAtMount])
 
   const refocus = useCallback(() => {
     if (window.getSelection()?.toString()) return
@@ -130,6 +135,7 @@ export function TerminalPuzzle({ chamber, onSolved, solved }: PuzzleProps) {
     solvedFired.current = true
     onSolved()
   }, [onSolved])
+  fireRef.current = fireSolved
 
   const startUnseal = useCallback(() => {
     setBusy(true)

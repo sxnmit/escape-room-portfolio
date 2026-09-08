@@ -80,6 +80,7 @@ export function DoorAssembly({ frame, id, accent, numeral, label, state, lockedM
     const dt = Math.min(rawDt, 1 / 20)
     const t = st.clock.elapsedTime
     const f = fx.current
+    if (!open) f.wasOpen = false
     if (open && !f.wasOpen) {
       f.wasOpen = true
       f.flashT = 0

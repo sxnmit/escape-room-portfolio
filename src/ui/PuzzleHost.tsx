@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { CHAMBERS, type ChamberId } from '@/data/resume'
 import { useGame } from '@/state/gameStore'
 import { sfx } from '@/audio/sfx'
@@ -19,6 +19,8 @@ export function PuzzleHost({ chamber }: { chamber: ChamberId }) {
   const c = CHAMBERS[chamber]
   const solved = useGame((s) => !!s.solved[chamber])
   const fired = useRef(false)
+  const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(closeTimer.current), [])
 
   const onSolved = useCallback(() => {
     if (fired.current) return
@@ -26,9 +28,14 @@ export function PuzzleHost({ chamber }: { chamber: ChamberId }) {
     const g = useGame.getState()
     g.solve(chamber)
     sfx.play('success')
-    setTimeout(() => {
+    // Identity, not shape: closing and reopening the same puzzle produces a new
+    // overlay object, and AnimatePresence may reuse this component across that
+    // round trip, so an unmount cleanup alone would not cancel this timer.
+    const opening = g.overlay
+    closeTimer.current = setTimeout(() => {
       const now = useGame.getState()
-      if (now.overlay?.kind === 'puzzle' && now.overlay.chamber === chamber) now.closeOverlay()
+      if (now.overlay !== opening) return
+      now.closeOverlay()
       now.showToast(`Vault ${c.numeral} · ${c.name} has unsealed in the hub.`, 'success')
     }, 2200)
   }, [chamber, c])

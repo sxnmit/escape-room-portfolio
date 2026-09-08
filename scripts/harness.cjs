@@ -14,7 +14,18 @@
  */
 const path = require('path')
 const fs = require('fs')
-const { chromium } = require('/opt/node22/lib/node_modules/playwright')
+// playwright may be a project dep, a global install, or on NODE_PATH
+const { chromium } = (() => {
+  const candidates = ['playwright', 'playwright-core', '@playwright/test', '/opt/node22/lib/node_modules/playwright']
+  for (const id of candidates) {
+    try {
+      return require(id)
+    } catch {
+      /* try the next one */
+    }
+  }
+  throw new Error(`Playwright not found. Install it with:  npm i -D playwright && npx playwright install chromium\n(tried: ${candidates.join(', ')})`)
+})()
 
 async function launch({ url = 'http://127.0.0.1:5173', out = 'shots', width = 1100, height = 680, fresh = true, lite = true } = {}) {
   if (lite && !/[?&]lite/.test(url)) url += (url.includes('?') ? '&' : '?') + 'lite'
@@ -137,4 +148,4 @@ async function launch({ url = 'http://127.0.0.1:5173', out = 'shots', width = 11
   return h
 }
 
-module.exports = { launch }
+module.exports = { launch, chromium }

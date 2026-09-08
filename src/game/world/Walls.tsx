@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import * as THREE from 'three'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { CHAMBERS } from '@/data/resume'
@@ -29,7 +28,7 @@ function accentFor(seg: WallSeg) {
  * accent colour, which is what makes the map readable from the camera's height.
  */
 export function Walls() {
-  const segs = useMemo(() => WALLS, [])
+  const segs = WALLS
   return (
     <group>
       <RigidBody type="fixed" colliders={false} name="walls">
